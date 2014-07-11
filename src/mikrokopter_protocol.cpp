@@ -27,7 +27,7 @@ Mikrokopter_protocol::Stream::Release_ref()
 {
     int res = atomic_fetch_sub(&ref_count, 1);
     if (res <= 0) {
-        VSM_EXCEPTION(vsm::Internal_error_exception, "Reference counter underflow");
+        VSM_EXCEPTION(ugcs::vsm::Internal_error_exception, "Reference counter underflow");
     } else if (res == 1) {
         Close();
     }
@@ -57,7 +57,7 @@ Mikrokopter_protocol::Stream::On_packet(Data_ptr data)
     }
     lock.unlock();
 
-    vsm::Request::Locker req_lock;
+    ugcs::vsm::Request::Locker req_lock;
     Pending_request *req = nullptr;
     while (pending_requests.size()) {
         req = &pending_requests.front();
@@ -65,7 +65,7 @@ Mikrokopter_protocol::Stream::On_packet(Data_ptr data)
         if (req->request->Is_processing()) {
             break;
         }
-        req_lock = vsm::Request::Locker();
+        req_lock = ugcs::vsm::Request::Locker();
         pending_requests.pop_front();
     }
 
@@ -86,17 +86,17 @@ Mikrokopter_protocol::Stream::On_packet(Data_ptr data)
     }
 
     req->handler.Set_arg<0>(pkt);
-    req->request->Complete(vsm::Request::Status::OK, std::move(req_lock));
+    req->request->Complete(ugcs::vsm::Request::Status::OK, std::move(req_lock));
     return true;
 }
 
-vsm::Operation_waiter
+ugcs::vsm::Operation_waiter
 Mikrokopter_protocol::Stream::Read(Packet_handler handler,
-                                   vsm::Request_completion_context::Ptr comp_ctx)
+                                   ugcs::vsm::Request_completion_context::Ptr comp_ctx)
 {
-    vsm::Request::Ptr req = vsm::Request::Create();
+    ugcs::vsm::Request::Ptr req = ugcs::vsm::Request::Create();
     req->Set_processing_handler(
-        vsm::Make_callback(&Mikrokopter_protocol::Stream::Handle_read, this,
+        ugcs::vsm::Make_callback(&Mikrokopter_protocol::Stream::Handle_read, this,
                            req, handler));
     req->Set_completion_handler(comp_ctx, handler.Get_callback());
     protocol.Submit_request(req);
@@ -105,7 +105,7 @@ Mikrokopter_protocol::Stream::Read(Packet_handler handler,
 
 
 void
-Mikrokopter_protocol::Stream::Handle_read(vsm::Request::Ptr request,
+Mikrokopter_protocol::Stream::Handle_read(ugcs::vsm::Request::Ptr request,
                                           Packet_handler handler)
 {
     pending_requests.emplace_back(Pending_request{request, handler});
@@ -116,10 +116,10 @@ Mikrokopter_protocol::Stream::Handle_read(vsm::Request::Ptr request,
 
 constexpr std::chrono::milliseconds Mikrokopter_protocol::DEFAULT_TIMEOUT;
 
-Mikrokopter_protocol::Mikrokopter_protocol(vsm::Io_stream::Ref stream):
-    vsm::Request_processor("Mikrokopter protocol processor"),
+Mikrokopter_protocol::Mikrokopter_protocol(ugcs::vsm::Io_stream::Ref stream):
+    ugcs::vsm::Request_processor("Mikrokopter protocol processor"),
     stream(stream),
-    serial_number("<not supported>")
+    serial_number(stream->Get_name())
 {
 
 }
@@ -127,21 +127,21 @@ Mikrokopter_protocol::Mikrokopter_protocol(vsm::Io_stream::Ref stream):
 void
 Mikrokopter_protocol::On_enable()
 {
-    vsm::Request_processor::On_enable();
-    comp_ctx = vsm::Request_completion_context::Create(
+    ugcs::vsm::Request_processor::On_enable();
+    comp_ctx = ugcs::vsm::Request_completion_context::Create(
             "Mikrokopter protocol completion",
             Get_waiter());
     comp_ctx->Enable();
-    worker = vsm::Request_worker::Create(
+    worker = ugcs::vsm::Request_worker::Create(
         "Mikrokopter protocol worker",
-        std::initializer_list<vsm::Request_container::Ptr> { Shared_from_this(), comp_ctx });
+        std::initializer_list<ugcs::vsm::Request_container::Ptr> { Shared_from_this(), comp_ctx });
     worker->Enable();
 
     Schedule_read();
 
     /* Send magic packet to ensure UART is not redirected from NC. */
     const uint8_t magic_pkt[] = {0x1B, 0x1B, 0x55, 0xAA, 0x00};
-    stream->Write(vsm::Io_buffer::Create(magic_pkt, sizeof(magic_pkt)));
+    stream->Write(ugcs::vsm::Io_buffer::Create(magic_pkt, sizeof(magic_pkt)));
 
     /* Start detection. */
     proto::Data<proto::Echo> data;
@@ -156,7 +156,7 @@ Mikrokopter_protocol::On_enable()
 void
 Mikrokopter_protocol::On_disable()
 {
-    auto req = vsm::Request::Create();
+    auto req = ugcs::vsm::Request::Create();
     req->Set_processing_handler(
             Make_callback(
                     &Mikrokopter_protocol::On_disable_handler,
@@ -174,7 +174,7 @@ Mikrokopter_protocol::On_disable()
 }
 
 void
-Mikrokopter_protocol::On_disable_handler(vsm::Request::Ptr request)
+Mikrokopter_protocol::On_disable_handler(ugcs::vsm::Request::Ptr request)
 {
     link_detection_op.Abort();
     read_op.Abort();
@@ -196,14 +196,14 @@ Mikrokopter_protocol::On_disable_handler(vsm::Request::Ptr request)
 void
 Mikrokopter_protocol::Close()
 {
-    vsm::Request::Ptr req = vsm::Request::Create();
+    ugcs::vsm::Request::Ptr req = ugcs::vsm::Request::Create();
     req->Set_processing_handler(
-        vsm::Make_callback(&Mikrokopter_protocol::Handle_close, this, req));
+        ugcs::vsm::Make_callback(&Mikrokopter_protocol::Handle_close, this, req));
     Submit_request(req);
 }
 
 void
-Mikrokopter_protocol::Handle_close(vsm::Request::Ptr request)
+Mikrokopter_protocol::Handle_close(ugcs::vsm::Request::Ptr request)
 {
     state = State::CLOSED;
     stream->Close();
@@ -220,19 +220,19 @@ Mikrokopter_protocol::Schedule_read()
                  comp_ctx);
 }
 
-vsm::Operation_waiter
+ugcs::vsm::Operation_waiter
 Mikrokopter_protocol::Command(Command_id id, Address address,
                               Data &&data,
                               Command_id response_id,
                               Data_handler response_handler,
-                              vsm::Request_completion_context::Ptr comp_ctx,
+                              ugcs::vsm::Request_completion_context::Ptr comp_ctx,
                               std::chrono::milliseconds timeout,
                               int num_retransmissions)
 {
-    vsm::Io_buffer::Ptr pkt = Build_packet(id, address, std::move(data));
-    vsm::Request::Ptr req = vsm::Request::Create();
+    ugcs::vsm::Io_buffer::Ptr pkt = Build_packet(id, address, std::move(data));
+    ugcs::vsm::Request::Ptr req = ugcs::vsm::Request::Create();
     req->Set_processing_handler(
-        vsm::Make_callback(&Mikrokopter_protocol::Handle_command, this,
+        ugcs::vsm::Make_callback(&Mikrokopter_protocol::Handle_command, this,
                            req, address, response_id, response_handler, pkt,
                            timeout, num_retransmissions));
     req->Set_completion_handler(comp_ctx ? comp_ctx : this->comp_ctx,
@@ -241,7 +241,7 @@ Mikrokopter_protocol::Command(Command_id id, Address address,
     return req;
 }
 
-vsm::Io_buffer::Ptr
+ugcs::vsm::Io_buffer::Ptr
 Mikrokopter_protocol::Build_packet(Command_id id, Address address,
                                    std::vector<uint8_t> &&data)
 {
@@ -254,7 +254,7 @@ Mikrokopter_protocol::Build_packet(Command_id id, Address address,
     packet.push_back(crc.first);
     packet.push_back(crc.second);
     packet.push_back('\r');
-    return vsm::Io_buffer::Create(std::move(packet));
+    return ugcs::vsm::Io_buffer::Create(std::move(packet));
 }
 
 void
@@ -309,11 +309,11 @@ Mikrokopter_protocol::Calculate_crc(uint8_t *data, size_t size)
 }
 
 void
-Mikrokopter_protocol::Handle_command(vsm::Request::Ptr request,
+Mikrokopter_protocol::Handle_command(ugcs::vsm::Request::Ptr request,
                                      Address address,
                                      Command_id response_id,
                                      Data_handler response_handler,
-                                     vsm::Io_buffer::Ptr request_pkt,
+                                     ugcs::vsm::Io_buffer::Ptr request_pkt,
                                      std::chrono::milliseconds timeout,
                                      int num_retransmissions)
 {
@@ -341,9 +341,9 @@ Mikrokopter_protocol::Start_request(const Address_id &aid, Response_handler &h)
 {
     if (h.timeout.count()) {
         h.to_timer =
-            vsm::Timer_processor::Get_instance()->Create_timer(
+            ugcs::vsm::Timer_processor::Get_instance()->Create_timer(
                 h.timeout,
-                vsm::Make_callback(&Mikrokopter_protocol::Timeout_handler,
+                ugcs::vsm::Make_callback(&Mikrokopter_protocol::Timeout_handler,
                                    this, aid),
                 this->comp_ctx);
     }
@@ -394,19 +394,19 @@ Mikrokopter_protocol::Finish_request(Response_map::iterator &it, Data_ptr pkt)
     auto lock = h->request->Lock();
     if (h->request->Is_processing()) {
         if (pkt) {
-            h->handler.Set_args(vsm::Io_result::OK, pkt);
+            h->handler.Set_args(ugcs::vsm::Io_result::OK, pkt);
         } else {
-            h->handler.Set_args(vsm::Io_result::TIMED_OUT, nullptr);
+            h->handler.Set_args(ugcs::vsm::Io_result::TIMED_OUT, nullptr);
         }
-        h->request->Complete(vsm::Request::Status::OK, std::move(lock));
+        h->request->Complete(ugcs::vsm::Request::Status::OK, std::move(lock));
         h->request = nullptr;
     }
 }
 
 void
-Mikrokopter_protocol::On_data_received(vsm::Io_buffer::Ptr buf, vsm::Io_result result)
+Mikrokopter_protocol::On_data_received(ugcs::vsm::Io_buffer::Ptr buf, ugcs::vsm::Io_result result)
 {
-    if (result == vsm::Io_result::OK) {
+    if (result == ugcs::vsm::Io_result::OK) {
         std::string data = buf->Get_string();
         for (char c: data) {
             On_char_received(c);
@@ -503,9 +503,9 @@ Mikrokopter_protocol::On_packet_received(Address_id aid, Data_ptr payload)
 }
 
 void
-Mikrokopter_protocol::Detection_handler(vsm::Io_result result, Data_ptr pkt)
+Mikrokopter_protocol::Detection_handler(ugcs::vsm::Io_result result, Data_ptr pkt)
 {
-    if (result == vsm::Io_result::OK &&
+    if (result == ugcs::vsm::Io_result::OK &&
         proto::Data<proto::Echo>(*pkt)->pattern == DETECTION_PATTERN) {
 
         state = State::OPERATIONAL;
@@ -524,13 +524,13 @@ Mikrokopter_protocol::Subscribe(Command_id id, Address address)
 {
     Address_id aid = {address, id};
     if (aid.first == Address::NONE || aid.second == Command_id::NONE) {
-        VSM_EXCEPTION(vsm::Invalid_param_exception, "Invalid address/ID");
+        VSM_EXCEPTION(ugcs::vsm::Invalid_param_exception, "Invalid address/ID");
     }
     Stream::Ptr stream = Stream::Create(*this);
     std::unique_lock<std::mutex>(stream_mutex);
     auto res = streams.emplace(aid, stream);
     if (!res.second) {
-        VSM_EXCEPTION(vsm::Invalid_op_exception, "The stream already exists");
+        VSM_EXCEPTION(ugcs::vsm::Invalid_op_exception, "The stream already exists");
     }
     return stream;
 }

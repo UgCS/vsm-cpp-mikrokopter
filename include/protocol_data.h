@@ -12,7 +12,7 @@ namespace proto {
 /** Used in Serial Link Test command. */
 struct Echo {
     /** Echo pattern. */
-    vsm::Le_uint16 pattern;
+    ugcs::vsm::Le_uint16 pattern;
 } __PACKED;
 
 enum class Gps_status: uint8_t {
@@ -29,36 +29,36 @@ enum class Point_type: uint8_t {
 
 struct Gps_pos {
     /** In 1E-7 degrees */
-    vsm::Le_int32 longitude,
+    ugcs::vsm::Le_int32 longitude,
     /** In 1E-7 degrees */
-                  latitude,
+                        latitude,
     /** In decimetres. */
-                  altitude;
+                        altitude;
     Gps_status status;
 
-    vsm::Wgs84_position
+    ugcs::vsm::Wgs84_position
     Get_position() const
     {
-        return vsm::Geodetic_tuple(
+        return ugcs::vsm::Geodetic_tuple(
             static_cast<double>(latitude) / 1e7 / 180.0 * M_PI,
             static_cast<double>(longitude) / 1e7 / 180.0 * M_PI,
             static_cast<double>(altitude) / 10.0);
     }
 
     /** In telemetry reports altitude has different units. */
-    vsm::Wgs84_position
+    ugcs::vsm::Wgs84_position
     Get_position_telemetry() const
     {
-        return vsm::Geodetic_tuple(
+        return ugcs::vsm::Geodetic_tuple(
             static_cast<double>(latitude) / 1e7 / 180.0 * M_PI,
             static_cast<double>(longitude) / 1e7 / 180.0 * M_PI,
             static_cast<double>(altitude) / 1000.0);
     }
 
     static Gps_pos
-    From_position(const vsm::Wgs84_position &pos)
+    From_position(const ugcs::vsm::Wgs84_position &pos)
     {
-        vsm::Geodetic_tuple gt = pos.Get_geodetic();
+        ugcs::vsm::Geodetic_tuple gt = pos.Get_geodetic();
         return Gps_pos {gt.longitude * 180.0 / M_PI * 1e7,
                         gt.latitude * 180.0 / M_PI * 1e7,
                         gt.altitude * 10,
@@ -68,9 +68,9 @@ struct Gps_pos {
 
 struct Gps_pos_dev {
     /** Distance to target in cm. */
-    vsm::Le_uint16 distance;
+    ugcs::vsm::Le_uint16 distance;
     /** Course to target in deg. */
-    vsm::Le_int16 bearing;
+    ugcs::vsm::Le_int16 bearing;
 } __PACKED;
 
 struct Point {
@@ -79,7 +79,7 @@ struct Point {
     /** Orientation, 0 no action, 1...360 fix heading,
      * negative = Index to POI in WP List.
      */
-    vsm::Le_int16 heading;
+    ugcs::vsm::Le_int16 heading;
     /** In meters, if the MK is within that range around the target, then the
      * next target is triggered.
      */
@@ -148,19 +148,19 @@ struct Navi_data {
     /** Number of satellites used for position solution */
     uint8_t satellites_in_use;
     /** Height according to air pressure */
-    vsm::Le_int16 altimeter;
+    ugcs::vsm::Le_int16 altimeter;
     /** Climb(+) and sink(-) rate */
-    vsm::Le_int16 variometer;
+    ugcs::vsm::Le_int16 variometer;
     /** In seconds */
-    vsm::Le_uint16 flying_time;
+    ugcs::vsm::Le_uint16 flying_time;
     /** Battery Voltage in 0.1 Volts */
     uint8_t bat_voltage;
     /** Speed over ground in cm/s (2D) */
-    vsm::Le_uint16 ground_speed;
+    ugcs::vsm::Le_uint16 ground_speed;
     /** Current flight direction in deg as angle to north */
-    vsm::Le_int16 heading;
+    ugcs::vsm::Le_int16 heading;
     /** Current compass value in deg */
-    vsm::Le_int16 yaw;
+    ugcs::vsm::Le_int16 yaw;
     /** Current pitch angle in deg */
     int8_t pitch;
     /** Current roll angle in deg */
@@ -175,21 +175,45 @@ struct Navi_data {
     /** Current operation radius around the Home Position in m */
     uint8_t operating_radius;
     /** Velocity in vertical direction in cm/s */
-    vsm::Le_int16 top_speed;
+    ugcs::vsm::Le_int16 top_speed;
     /**  Time in s to stay at the given target, counts down to 0 if target has
      * been reached.
      */
     uint8_t target_hold_time;
     uint8_t fc_status_flags_2;
     /** Setpoint for altitude */
-    vsm::Le_int16 setpoint_altitude;
+    ugcs::vsm::Le_int16 setpoint_altitude;
     /** For future use */
     uint8_t gas;
     /** Actual current in 0.1A steps */
-    vsm::Le_uint16 current;
+    ugcs::vsm::Le_uint16 current;
     /** Used capacity in mAh */
-    vsm::Le_uint16 used_capacity;
+    ugcs::vsm::Le_uint16 used_capacity;
 } __PACKED;
+
+/** Navi_data::nc_flags bits. */
+enum class Nc_flags {
+    FREE = 0x01,
+    PH = 0x02,
+    CH = 0x04,
+    RANGE_LIMIT = 0x08,
+    NOSERIALLINK = 0x10,
+    TARGET_REACHED = 0x20,
+    MANUAL = 0x40,
+    GPS_OK = 0x80
+};
+
+/** Navi_data::fc_status_flags bits. */
+enum class Fc_status_flags {
+    MOTOR_RUN = 0x01,
+    FLY = 0x02,
+    CALIBRATE = 0x04,
+    START = 0x08,
+    EMERGENCY_LANDING = 0x10,
+    LOWBAT = 0x20,
+    VARIO_TRIM_UP = 0x40,
+    VARIO_TRIM_DOWN = 0x80
+};
 
 /** Wrapper for payload data structure. */
 template <class PayloadType>

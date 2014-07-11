@@ -4,7 +4,7 @@
 
 #include <vehicle_manager.h>
 
-#include <vsm/run_as_service.h>
+#include <ugcs/vsm/run_as_service.h>
 
 #ifdef __unix__
 #include <signal.h>
@@ -25,11 +25,11 @@ void Sigint_handler(int signum __UNUSED)
 void
 Main(int argc, char **argv)
 {
-    vsm::Initialize(argc, argv);
+    ugcs::vsm::Initialize(argc, argv, "vsm-mikrokopter.conf");
     vm.Enable();
     vm.Run();
     vm.Disable();
-    vsm::Terminate();
+    ugcs::vsm::Terminate();
 }
 
 int
@@ -50,10 +50,11 @@ Stop_main()
 int
 main(int argc, char *argv[])
 {
-    if (vsm::Run_as_service("ugcs-vsm-mikrokopter", argc, argv,
-                            vsm::Make_program_init_handler(Start_main),
-                            vsm::Make_callback(Stop_main))) {
-        return 0;
+    auto ret = ugcs::vsm::Run_as_service("ugcs-vsm-mikrokopter", argc, argv,
+                            ugcs::vsm::Make_program_init_handler(Start_main),
+                            ugcs::vsm::Make_callback(Stop_main));
+    if (ret != ugcs::vsm::SERVICE_RESULT_NORMAL_INVOCATION) {
+        return ret;
     }
 
 #ifdef __unix__

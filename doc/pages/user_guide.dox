@@ -1,0 +1,177 @@
+/**
+
+@page vsm_user_guide MikroKopter VSM User Guide
+
+@image latex ugcs-logo.png "" width=3cm
+@image latex main-vsm-logo.png "" width=3cm
+
+
+@section first_time_connecton First time vehicle connection
+
+See @ref vsm_disclaimer.
+
+Please follow these steps to connect an MikroKopter vehicle to the U[g]CS:
+
+1. MikroKopter vehicle must be properly configured, calibrated and
+tested using tools and instruction from the official
+[MikroKopter web site](http://mikrokopter.de/) prior to using it with U[g]CS.
+U[g]CS does not support initial configuration, setup and calibration of MikroKopter
+vehicles.
+
+2. Turn on the vehicle and plug in the radio modem paired with the vehicle or
+direct USB cable from the MikroKopter board to the computer where VSM is running.
+U[g]CS uses serial ports for communication with MikroKopter vehicles. Serial
+interface based communication devices like WI232 radio modems (and their analogs)
+and direct USB-serial connections are supported, as long as OS driver for
+virtual serial port is installed and serial port is successfully created. Please
+refer to your communication equipment manufacturer documentation about driver
+installation instructions.
+
+3. Open _Vehicles_ window in U[g]CS Client and wait until new vehicle appears there
+automatically. Both Uplink and Downlink connections should be available. Press
+_Edit_ and select corresponding vehicle profile, an image and change the default
+vehicle name and tail number to be convenient for you:
+@image html new-mk-vehicle.png "New MikroKopter vehicle"
+@image latex new-mk-vehicle.png "New MikroKopter vehicle" width=10cm
+Vehicle profile needs to be assigned to allow mission planning with this vehicle.
+Image needs to be assigned to see vehicle location on the map.
+
+4. Repeat steps above for each your MikroKopter vehicle.
+
+Please note that there is no technical possibility to distinguish between
+different MK drones if they are connected via the same port. The only way to
+identify drones is looking at their serial port instances. To be sure that you
+have permanent drones mapping, please ensure that you connect each drone via a
+dedicated serial port. This firstly means that you cannot share the same radio-modem
+or USB-serial cable between different drones. If you are using Windows OS it
+usually reserves unique serial port number for each USB-serial device. On Linux
+OS you will need to take additional measures - manually provide udev rules for
+permanent device mapping based on its serial number (if such exists. Some USB
+devices do not have serial number specified, you will not be able to use them
+to connect multiple MikroKopters). Udev rules creation example:
+http://noctis.de/ramblings/linux/49-howto-fixed-name-for-a-udev-device.html
+
+If you use your own serial device naming on Linux, do not forget to add the
+corresponding name to the VSM configuration:
+
+    vehicle.mikrokopter.serial_port.2.name = /dev/mikrokopter_1
+    vehicle.mikrokopter.serial_port.2.baud.1 = 57600
+
+Supported MikroKopter firmware versions:
+- 0.x
+- 2.00 may be supported but not tested.
+
+@section mission_execution_specifics Mission execution specifics
+
+Flight plan element / action | Support | Notes
+-----------------------------|---------|---------
+Camera control  |  Partial   | Only pitch control is supported.   |
+Camera trigger  |  Partial   | Only photo shot is supported. |
+Panorama        |  Partial   | Panorama is always counted from North or last set heading |
+Take-off        |  No        |  |
+Landing         |  No        |  |
+
+Take-off and landing is not supported in scope of automatic mission execution.
+You should take-off or land the drone either manually or using auto-start/landing
+feature of the MikroKopter which can be activated by switch on RC. See MikroKopter
+vendor documentation.
+
+CareFree feature must be enabled in MikroKopter for all actions which
+automatically control copter heading (like POI, heading set etc.) See
+http://www.mikrokopter.de/ucwiki/en/CareFree
+
+None of fail-safe mode adjustments is supported in the U[g]CS mission parameters.
+Use MikroKopter original software instead to set up fail-safe parameters.
+
+@subsection mes_camera_trigger Camera trigger action
+
+Can be used to trigger payload-specific action during mission execution. It
+triggers WP-event in the MikroKopter. See http://www.mikrokopter.de/ucwiki/en/WaypointEvent
+and http://www.mikrokopter.de/ucwiki/en/WpEvent for more detailed description of
+this MK feature. As described there, before you can use this feature you should
+set up pattern for the flight controller output OUT1 or SRV3 using KopterTool
+software. You may want to use [shutter cable](http://www.mikrokopter.de/ucwiki/en/ShutterCable) or
+[IR-controller](http://www.mikrokopter.de/ucwiki/en/IR-Ctrl) provided by the
+drone manufacturer.
+
+When the "take photo" action is fired the waypoint is created with
+wp-event-channel field set to the value specified in the VSM configuration (see
+@ref wp_event_value_param section). It is duration in deciseconds of one unit in
+output signal pattern. Also waypoint duration is set to time which is enough to
+execute at least one cycle of the pattern. Due to granularity difference in MK
+protocol the pattern may start the second cycle of execution before the waypoint
+is finished.
+
+@image html output-settings.png "Example of output configuration"
+@image latex output-settings.png "Example of output configuration" width=10cm
+
+In KopterTool output configuration ensure you have set "Combine with WP-event"
+option.
+
+@section command_execution_specifics Command execution specifics
+Command        | Support  | Notes
+---------------|----------|---------
+ARM            |  No      |  |
+DISARM         |  No      |  |
+AUTOMODE       |  No      |  |
+MANUALMODE     |  No      |  |
+RETURNHOME     |  Yes     | Current mission is erased in the device. It should be uploaded again in order to run it. Works only when the drone is in AUTO mode. |
+TAKEOFF        |  No      |  |
+LAND           |  No      |  |
+EMERGENCYLAND  |  No      |  |
+
+Use your RC to execute commands and switch between flight modes according to
+the manufacturer instructions.
+
+@section telemetry_info Telemetry information specifics
+
+Nothing specific.
+
+@section config_file_parameters_section Configuration file
+
+Default configuration file of the MikroKopter VSM suits most needs and it is
+generally not necessary to modify it.
+
+Configuration file location:
+
+- <b>On Microsoft Windows:</b>
+
+         C:\Program Files (x86)\UgCS\vsm-mikrokopter\vsm-mikrokopter.conf
+
+- <b>On GNU/Linux:</b>
+
+         /etc/opt/ugcs/vsm-mikrokopter.conf
+
+- <b>On Apple OS X:</b>
+
+          /Users/[user name]/Library/Application Support/UGCS/configuration/vsm-mikrokopter.conf
+
+@subsection wp_event_value_param WP-event value
+
+This parameter defines which value will be sent in wp-event-value field of the
+waypoint with "take photo" action. See @ref mes_camera_trigger section.
+
+    vehicle.mikrokopter.wp_event_value = 50
+
+@subsection common_params_section Common parameters
+
+All VSMs share a common set of configuration file parameters described in
+@ref common_config_file_params. MikroKopter VSM configuration file prefix is:
+
+    vehicle.mikrokopter
+
+@subsection serial_port_params_vsmspec Serial port configuration
+
+Mandatory. At least one serial port should be configured, otherwise VSM will not
+try to connect to the vehicle.
+
+- @b Name: vehicle.mikrokopter.serial_port
+- @b Description: Serial port configuration, for more details see
+@ref serial_port_parameters.
+Default MikroKopter serial port communication speed is 57600 baud.
+- @b Example:
+
+        vehicle.mikrokopter.serial_port.1.name = com1
+        vehicle.mikrokopter.serial_port.1.baud = 57600
+
+*/

@@ -5,9 +5,9 @@
 #ifndef MIKROKOPTER_PROTOCOL_H_
 #define MIKROKOPTER_PROTOCOL_H_
 
-#include <vsm/vsm.h>
+#include <ugcs/vsm/vsm.h>
 
-class Mikrokopter_protocol: public vsm::Request_processor {
+class Mikrokopter_protocol: public ugcs::vsm::Request_processor {
     DEFINE_COMMON_CLASS(Mikrokopter_protocol, Request_container)
 public:
     /** Protocol state. */
@@ -60,24 +60,20 @@ public:
     typedef std::shared_ptr<Data> Data_ptr;
 
     /** Handler for the event of protocol transition to OPERATIONAL state. */
-    typedef vsm::Callback_proxy<void> Ready_handler;
+    typedef ugcs::vsm::Callback_proxy<void> Ready_handler;
     /** Handler for the received packets.
      * @param result Operation result. Can be TIMED_OUT.
      * @param data Decoded payload data.
      */
-    typedef vsm::Callback_proxy<void, vsm::Io_result, Data_ptr> Data_handler;
+    typedef ugcs::vsm::Callback_proxy<void, ugcs::vsm::Io_result, Data_ptr> Data_handler;
 
     static constexpr std::chrono::milliseconds DEFAULT_TIMEOUT =
-#ifdef DEBUG
         std::chrono::milliseconds(400);
-#else /* DEBUG */
-        std::chrono::milliseconds(200);
-#endif /* DEBUG */
 
     /** Builder for data handler. */
     DEFINE_CALLBACK_BUILDER(Make_data_handler,
-                            (vsm::Io_result, Data_ptr),
-                            (vsm::Io_result::OK, nullptr));
+                            (ugcs::vsm::Io_result, Data_ptr),
+                            (ugcs::vsm::Io_result::OK, nullptr));
 
     /** Stream for specific messages subscription. */
     class Stream:
@@ -86,9 +82,9 @@ public:
         DEFINE_COMMON_CLASS(Stream, Stream)
     public:
         /** Reference type. */
-        typedef vsm::Reference_guard<Ptr> Ref;
+        typedef ugcs::vsm::Reference_guard<Ptr> Ref;
 
-        typedef vsm::Callback_proxy<void, Data_ptr> Packet_handler;
+        typedef ugcs::vsm::Callback_proxy<void, Data_ptr> Packet_handler;
         /** Builder for packet handler. */
         DEFINE_CALLBACK_BUILDER(Make_packet_handler, (Data_ptr), (nullptr));
 
@@ -106,10 +102,10 @@ public:
         Is_closed() const;
 
         /** Read next packet. */
-        vsm::Operation_waiter
+        ugcs::vsm::Operation_waiter
         Read(Packet_handler handler,
-             vsm::Request_completion_context::Ptr comp_ctx =
-                 vsm::Request_temp_completion_context::Create());
+             ugcs::vsm::Request_completion_context::Ptr comp_ctx =
+                 ugcs::vsm::Request_temp_completion_context::Create());
 
     private:
         friend Ref;
@@ -119,12 +115,12 @@ public:
 
         Mikrokopter_protocol &protocol;
         /** Reference counter. */
-        std::atomic_int ref_count;
+        std::atomic_int ref_count = { 0 };
         bool is_closed = false;
         mutable std::mutex close_mutex;
 
         struct Pending_request {
-            vsm::Request::Ptr request;
+            ugcs::vsm::Request::Ptr request;
             Packet_handler handler;
         };
 
@@ -150,10 +146,10 @@ public:
         On_packet(Data_ptr data);
 
         void
-        Handle_read(vsm::Request::Ptr request, Packet_handler handler);
+        Handle_read(ugcs::vsm::Request::Ptr request, Packet_handler handler);
     };
 
-    Mikrokopter_protocol(vsm::Io_stream::Ref stream);
+    Mikrokopter_protocol(ugcs::vsm::Io_stream::Ref stream);
 
     /** Intercept event of protocol transition to OPERATIONAL state. */
     void
@@ -178,14 +174,14 @@ public:
      * @param num_retransmissions Number of retransmissions to send. Zero to
      *      disable retransmissions.
      */
-    vsm::Operation_waiter
+    ugcs::vsm::Operation_waiter
     Command(Command_id id, Address address,
             Data &&data,
             Command_id response_id = Command_id::NONE,
             Data_handler response_handler =
-                vsm::Make_dummy_callback<void, vsm::Io_result, Data_ptr>(),
-            vsm::Request_completion_context::Ptr comp_ctx =
-                vsm::Request_temp_completion_context::Create(),
+                ugcs::vsm::Make_dummy_callback<void, ugcs::vsm::Io_result, Data_ptr>(),
+            ugcs::vsm::Request_completion_context::Ptr comp_ctx =
+                ugcs::vsm::Request_temp_completion_context::Create(),
             std::chrono::milliseconds timeout = DEFAULT_TIMEOUT,
             int num_retransmissions = 3);
 
@@ -200,12 +196,12 @@ public:
     void
     Add_packet_handler(Address address, Command_id id,
                        Data_handler handler,
-                       vsm::Request_completion_context::Ptr comp_ctx = nullptr);
+                       ugcs::vsm::Request_completion_context::Ptr comp_ctx = nullptr);
 
     std::string
     Get_serial_number()
     {
-        return "<not supported>";
+        return serial_number;
     }
 
     State
@@ -292,37 +288,37 @@ private:
     /** Current protocol state. */
     State state = State::INITIALIZING;
     /** Associated stream. */
-    vsm::Io_stream::Ref stream;
+    ugcs::vsm::Io_stream::Ref stream;
     /** Detected vehicle serial number. */
     std::string serial_number;
     /** Readiness handler if any. */
     Ready_handler ready_handler;
     /** Internal completion context. */
-    vsm::Request_completion_context::Ptr comp_ctx;
+    ugcs::vsm::Request_completion_context::Ptr comp_ctx;
     /** Worker for processor and completion context. */
-    vsm::Request_worker::Ptr worker;
+    ugcs::vsm::Request_worker::Ptr worker;
     /** Packet buffer. */
     std::string packet_buf;
     /** Packet statistics. */
     Pkt_stats pkt_stats;
     /** Current link detection operation. */
-    vsm::Operation_waiter link_detection_op;
+    ugcs::vsm::Operation_waiter link_detection_op;
     /** Current stream read operation. */
-    vsm::Operation_waiter read_op;
+    ugcs::vsm::Operation_waiter read_op;
 
     /** Represents installed response processing handler. */
     struct Response_handler {
         typedef std::shared_ptr<Response_handler> Ptr;
 
-        vsm::Request::Ptr request;
+        ugcs::vsm::Request::Ptr request;
         /** Response handler. */
         Data_handler handler;
         /** Request data to use for retransmissions. */
-        vsm::Io_buffer::Ptr request_pkt;
+        ugcs::vsm::Io_buffer::Ptr request_pkt;
         /** Request timeout duration, zero to disable timeout. */
         std::chrono::milliseconds timeout;
         /** Timeout timer if was specified. */
-        vsm::Timer_processor::Timer::Ptr to_timer;
+        ugcs::vsm::Timer_processor::Timer::Ptr to_timer;
         /** Number of retransmissions left to send. */
         int num_retrans_left;
 
@@ -351,11 +347,11 @@ private:
 
     /** Disable in a protocol context. */
     void
-    On_disable_handler(vsm::Request::Ptr);
+    On_disable_handler(ugcs::vsm::Request::Ptr);
 
     /** Incoming raw data handler. */
     void
-    On_data_received(vsm::Io_buffer::Ptr buf, vsm::Io_result result);
+    On_data_received(ugcs::vsm::Io_buffer::Ptr buf, ugcs::vsm::Io_result result);
 
     /** Schedule next read operation for the input stream. */
     void
@@ -372,16 +368,16 @@ private:
     On_packet_received(Address_id aid, Data_ptr payload);
 
     void
-    Handle_command(vsm::Request::Ptr request,
+    Handle_command(ugcs::vsm::Request::Ptr request,
                    Address address,
                    Command_id response_id,
                    Data_handler response_handler,
-                   vsm::Io_buffer::Ptr request_pkt,
+                   ugcs::vsm::Io_buffer::Ptr request_pkt,
                    std::chrono::milliseconds timeout,
                    int num_retransmissions);
 
     /** Build packet for sending. */
-    vsm::Io_buffer::Ptr
+    ugcs::vsm::Io_buffer::Ptr
     Build_packet(Command_id id, Address address,
                  Data &&data);
 
@@ -410,7 +406,7 @@ private:
     Timeout_handler(Address_id aid);
 
     void
-    Detection_handler(vsm::Io_result result, Data_ptr pkt);
+    Detection_handler(ugcs::vsm::Io_result result, Data_ptr pkt);
 
     /** Finalize request processing.
      * @param it Iterator pointing to corresponding handler record.
@@ -423,7 +419,7 @@ private:
     Start_request(const Address_id &aid, Response_handler &h);
 
     void
-    Handle_close(vsm::Request::Ptr);
+    Handle_close(ugcs::vsm::Request::Ptr);
 };
 
 #endif /* MIKROKOPTER_PROTOCOL_H_ */

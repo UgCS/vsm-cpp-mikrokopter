@@ -10,8 +10,6 @@
 class Vehicle_manager {
 public:
 
-    Vehicle_manager();
-
     void
     Enable();
 
@@ -31,7 +29,7 @@ private:
     class Port {
     public:
         /** Opened stream if the port available. */
-        vsm::Io_stream::Ref stream;
+        ugcs::vsm::Io_stream::Ref stream;
         /** Bound protocol instance. */
         Mikrokopter_protocol::Ptr protocol;
         /** Vehicle instance if created and the port is bound to it. */
@@ -47,13 +45,13 @@ private:
     /** Protects ports and vehicles lists. */
     std::mutex lists_mutex;
     /** Context for serving SDK requests. */
-    vsm::Request_processor::Ptr proc_context;
+    ugcs::vsm::Request_processor::Ptr proc_context;
     /** Context used for processing completion notifications from SDK. */
-    vsm::Request_completion_context::Ptr comp_context;
+    ugcs::vsm::Request_completion_context::Ptr comp_context;
     /** Ports polling timer. */
-    vsm::Timer_processor::Timer::Ptr poll_timer;
+    ugcs::vsm::Timer_processor::Timer::Ptr poll_timer;
 
-    std::atomic<bool> stop_request;
+    std::atomic_bool stop_request =  { false };
 
     /** Check if some of configured ports can be opened. */
     bool
@@ -70,8 +68,11 @@ private:
 
     /** Port connection handler. */
     void
-    Port_connect_handler(std::string port_name, int baud,
-                         vsm::Io_stream::Ref stream);
+    Port_connect_handler(
+    		std::string port_name,
+    		int baud,
+    		ugcs::vsm::Socket_address::Ptr,
+    		ugcs::vsm::Io_stream::Ref stream);
 };
 
 
