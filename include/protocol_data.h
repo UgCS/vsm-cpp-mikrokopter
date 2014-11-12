@@ -147,7 +147,7 @@ struct Navi_data {
     uint8_t wp_count;
     /** Number of satellites used for position solution */
     uint8_t satellites_in_use;
-    /** Height according to air pressure */
+    /** Height according to air pressure. Unit is 5cm. */
     ugcs::vsm::Le_int16 altimeter;
     /** Climb(+) and sink(-) rate */
     ugcs::vsm::Le_int16 variometer;
@@ -157,7 +157,7 @@ struct Navi_data {
     uint8_t bat_voltage;
     /** Speed over ground in cm/s (2D) */
     ugcs::vsm::Le_uint16 ground_speed;
-    /** Current flight direction in deg as angle to north */
+    /** Current flight direction in deg as angle to north (course). */
     ugcs::vsm::Le_int16 heading;
     /** Current compass value in deg */
     ugcs::vsm::Le_int16 yaw;

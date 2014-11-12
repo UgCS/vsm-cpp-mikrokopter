@@ -29,10 +29,10 @@ installation instructions.
 
 3. Open _Vehicles_ window in U[g]CS Client and wait until new vehicle appears there
 automatically. Both Uplink and Downlink connections should be available. Press
-_Edit_ and select corresponding vehicle profile, an image and change the default
-vehicle name and tail number to be convenient for you:
+_Gain control_ and _Edit_ to select corresponding vehicle profile and change the default
+vehicle name to be convenient for you:
 @image html new-mk-vehicle.png "New MikroKopter vehicle"
-@image latex new-mk-vehicle.png "New MikroKopter vehicle" width=10cm
+@image latex new-mk-vehicle.png "New MikroKopter vehicle" width=15cm
 Vehicle profile needs to be assigned to allow mission planning with this vehicle.
 Image needs to be assigned to see vehicle location on the map.
 
@@ -62,6 +62,8 @@ Supported MikroKopter firmware versions:
 - 2.00 may be supported but not tested.
 
 @section mission_execution_specifics Mission execution specifics
+
+Before executing a mission, Mikrokopter must be set to Altitude hold mode and throttle must be in mid position!
 
 Flight plan element / action | Support | Notes
 -----------------------------|---------|---------
@@ -126,6 +128,10 @@ the manufacturer instructions.
 @section telemetry_info Telemetry information specifics
 
 Nothing specific.
+
+@section fail-safe Fail-safe actions
+
+Fail-safe actions can be set only in KopterTool.
 
 @section config_file_parameters_section Configuration file
 

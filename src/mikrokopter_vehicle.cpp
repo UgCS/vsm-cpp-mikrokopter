@@ -206,9 +206,6 @@ Mikrokopter_vehicle::Create_waypoint(State_info_upload_task::Ptr si,
         } else if (action->Get_type() == ugcs::vsm::Action::Type::MOVE) {
             ugcs::vsm::Move_action::Ptr a =
                 action->Get_action<ugcs::vsm::Action::Type::MOVE>();
-            if (!si->launch_elevation) {
-                si->launch_elevation = a->elevation;
-            }
             wp->hold_time = Lookup_wait(si->request->actions,
                                         si->num_act_processed + 1);
             wp->type = proto::Point_type::WP;
@@ -226,7 +223,7 @@ Mikrokopter_vehicle::Create_waypoint(State_info_upload_task::Ptr si,
             wp->tolerance_radius = si->tolerance_radius;
             wp->heading = si->cur_heading;
             ugcs::vsm::Geodetic_tuple pos = a->position.Get_geodetic();
-            pos.altitude -= *si->launch_elevation;
+            pos.altitude -= si->launch_elevation;
             si->last_position = pos;
             wp->position = proto::Gps_pos::From_position(pos);
             wp->speed = si->speed * 10;
@@ -243,7 +240,7 @@ Mikrokopter_vehicle::Create_waypoint(State_info_upload_task::Ptr si,
             if (a->active) {
                 wp->type = proto::Point_type::POI;
                 ugcs::vsm::Geodetic_tuple pos = a->position.Get_geodetic();
-                pos.altitude -= *si->launch_elevation;
+                pos.altitude -= si->launch_elevation;
                 wp->position = proto::Gps_pos::From_position(pos);
                 wp->index = si->num_uploaded + 1;
                 wp->name[0] = 'P';
@@ -514,18 +511,18 @@ Mikrokopter_vehicle::On_telemetry(Mikrokopter_protocol::Data_ptr data)
 
     report->Set<ugcs::vsm::tm::Ground_speed>(static_cast<double>(nav->ground_speed) / 100);
 
-    report->Set<ugcs::vsm::tm::Heading>(nav->heading.Get());
+    report->Set<ugcs::vsm::tm::Course>(nav->heading.Get() / 180.0 * M_PI);
 
-    report->Set<ugcs::vsm::tm::Pitch>(-static_cast<double>(nav->pitch) / 180.0 * M_PI);
+    report->Set<ugcs::vsm::tm::Attitude::Pitch>(-static_cast<double>(nav->pitch) / 180.0 * M_PI);
 
-    report->Set<ugcs::vsm::tm::Roll>(-static_cast<double>(nav->roll) / 180.0 * M_PI);
+    report->Set<ugcs::vsm::tm::Attitude::Roll>(-static_cast<double>(nav->roll) / 180.0 * M_PI);
 
-    report->Set<ugcs::vsm::tm::Yaw>(static_cast<double>(nav->yaw) / 180.0 * M_PI);
+    report->Set<ugcs::vsm::tm::Attitude::Yaw>(static_cast<double>(nav->yaw) / 180.0 * M_PI);
 
     report->Set<ugcs::vsm::tm::Climb_rate>(nav->variometer.Get());//XXX units?
 
     /* No information about units. 1:21 ratio was found experimentally. */
-    report->Set<ugcs::vsm::tm::Rel_altitude>(static_cast<double>(nav->altimeter.Get()) / 21.0);
+    report->Set<ugcs::vsm::tm::Rel_altitude>(static_cast<double>(nav->altimeter.Get()) / 20.0);
 
     if (nav->nc_flags & static_cast<uint8_t>(proto::Nc_flags::CH)) {
         sys_status.control_mode = Sys_status::Control_mode::AUTO;

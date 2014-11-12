@@ -112,7 +112,7 @@ private:
         typedef std::shared_ptr<State_info_upload_task> Ptr;
 
         /** Launch site absolute height. */
-        ugcs::vsm::Optional<double> launch_elevation;
+        double launch_elevation;
         /** Number of waypoints uploaded so far. */
         size_t num_uploaded = 0,
         /** Number of actions processed so far. */
@@ -144,7 +144,9 @@ private:
 
         State_info_upload_task(const ugcs::vsm::Vehicle_task_request::Handle &request):
             State_info(request)
-        {}
+        {
+            launch_elevation = this->request->Get_takeoff_altitude();
+        }
     };
 
     /** Enable handler. */
