@@ -4,24 +4,26 @@
 
 #include <vehicle_manager.h>
 
+using namespace ugcs::vsm;
+
 void
 Vehicle_manager::Enable()
 {
-    proc_context = ugcs::vsm::Request_processor::Create("Mikrokopter vehicle manager processor");
+    proc_context = Request_processor::Create("Mikrokopter vehicle manager processor");
     proc_context->Enable();
-    comp_context = ugcs::vsm::Request_completion_context::Create(
+    comp_context = Request_completion_context::Create(
             "Mikrokopter vehicle manager completion",
             proc_context->Get_waiter());
     comp_context->Enable();
 
-    poll_timer = ugcs::vsm::Timer_processor::Get_instance()->Create_timer(
+    poll_timer = Timer_processor::Get_instance()->Create_timer(
         std::chrono::seconds(1),
-        ugcs::vsm::Make_callback(&Vehicle_manager::Poll_ports, this),
+        Make_callback(&Vehicle_manager::Poll_ports, this),
         comp_context);
 
-    ugcs::vsm::Transport_detector::Get_instance()->Add_detector(
+    Transport_detector::Get_instance()->Add_detector(
             "vehicle.mikrokopter.serial_port",
-            ugcs::vsm::Transport_detector::Make_connect_handler(
+            Transport_detector::Make_connect_handler(
                 &Vehicle_manager::Port_connect_handler, this),
             proc_context);
 }
@@ -61,10 +63,10 @@ void
 Vehicle_manager::Run()
 {
     comp_context->Get_waiter()->Wait_and_process(
-        std::initializer_list<ugcs::vsm::Request_container::Ptr> {comp_context, proc_context},
+        std::initializer_list<Request_container::Ptr> {comp_context, proc_context},
         std::chrono::milliseconds::zero(),
         0,
-        ugcs::vsm::Make_callback([this]{ return static_cast<bool>(stop_request); }));
+        Make_callback([this]{ return static_cast<bool>(stop_request); }));
 }
 
 void
@@ -116,7 +118,7 @@ Vehicle_manager::Protocol_ready_handler(Port *port)
 }
 
 void
-Vehicle_manager::Disconnect_vehicle(Mikrokopter_vehicle::Ptr vehicle __UNUSED)
+Vehicle_manager::Disconnect_vehicle(Mikrokopter_vehicle::Ptr vehicle)
 {
     vehicle->Disable();
     vehicles.erase(vehicle->Get_serial_number());
@@ -143,8 +145,8 @@ void
 Vehicle_manager::Port_connect_handler(
 		std::string,
 		int,
-		ugcs::vsm::Socket_address::Ptr,
-		ugcs::vsm::Io_stream::Ref stream)
+		Socket_address::Ptr,
+		Io_stream::Ref stream)
 {
     std::unique_lock<std::mutex> lock(lists_mutex);
     auto res = ports.emplace(stream->Get_name(), Port());
@@ -159,8 +161,6 @@ Vehicle_manager::Port_connect_handler(
     port.stream = stream;
     port.protocol = Mikrokopter_protocol::Create(port.stream);
     port.protocol->Set_ready_handler(
-        ugcs::vsm::Make_callback(&Vehicle_manager::Protocol_ready_handler,
-                           this,
-                           &port));
+        Make_callback(&Vehicle_manager::Protocol_ready_handler, this, &port));
     port.protocol->Enable();
 }

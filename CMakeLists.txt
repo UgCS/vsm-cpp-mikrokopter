@@ -21,6 +21,7 @@ endif()
 set(UGCS_PACKAGE_SUMMARY "UgCS vehicle specific module (VSM) for Mikrokopter")
 set(UGCS_VSM_USER_GUIDE_LATEX_TITLE "Mikrokopter VSM User Guide")
 
+set(CMAKE_VERBOSE_MAKEFILE true)
 set(CMAKE_MODULE_PATH "${VSM_SDK_DIR}/share/cmake")
 include("ugcs/vsm")
 

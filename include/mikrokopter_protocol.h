@@ -305,6 +305,10 @@ private:
     ugcs::vsm::Operation_waiter link_detection_op;
     /** Current stream read operation. */
     ugcs::vsm::Operation_waiter read_op;
+    /** Current stream write operation. */
+    ugcs::vsm::Operation_waiter write_op;
+    /** Queued packets for writing. */
+    std::list<ugcs::vsm::Io_buffer::Ptr> write_queue;
 
     /** Represents installed response processing handler. */
     struct Response_handler {
@@ -344,6 +348,10 @@ private:
 
     virtual void
     On_disable() override;
+
+    /** Enable in a protocol context. */
+    void
+    On_enable_handler(ugcs::vsm::Request::Ptr);
 
     /** Disable in a protocol context. */
     void
@@ -420,6 +428,13 @@ private:
 
     void
     Handle_close(ugcs::vsm::Request::Ptr);
+
+    void
+    Send_packet(ugcs::vsm::Io_buffer::Ptr pkt);
+
+    /** Handle packet sending completion. */
+    void
+    Handle_send(ugcs::vsm::Io_result result);
 };
 
 #endif /* MIKROKOPTER_PROTOCOL_H_ */

@@ -4,15 +4,17 @@
 
 #include <mikrokopter_vehicle.h>
 
+using namespace ugcs::vsm;
+
 constexpr std::chrono::milliseconds
     Mikrokopter_vehicle::TELEMETRY_REQUEST_INTERVAL,
     Mikrokopter_vehicle::TELEMETRY_REPORT_INTERVAL,
     Mikrokopter_vehicle::LINK_MONITOR_INTERVAL;
 
 Mikrokopter_vehicle::Mikrokopter_vehicle(Mikrokopter_protocol::Ptr protocol):
-    Vehicle(ugcs::vsm::mavlink::MAV_TYPE_QUADROTOR,
-            static_cast<ugcs::vsm::mavlink::MAV_AUTOPILOT>(ugcs::vsm::mavlink::ugcs::MAV_AUTOPILOT_MIKROKOPTER),
-            ugcs::vsm::Vehicle::Capabilities(ugcs::vsm::Vehicle::Capability::RETURN_HOME_AVAILABLE),
+    Vehicle(mavlink::MAV_TYPE_QUADROTOR,
+            static_cast<mavlink::MAV_AUTOPILOT>(mavlink::ugcs::MAV_AUTOPILOT_MIKROKOPTER),
+            Vehicle::Capabilities(Vehicle::Capability::RETURN_HOME_AVAILABLE),
             protocol->Get_serial_number(),
             "MikroKopter"),
     protocol(protocol),
@@ -21,7 +23,7 @@ Mikrokopter_vehicle::Mikrokopter_vehicle(Mikrokopter_protocol::Ptr protocol):
 {
     VEHICLE_LOG_INF(*this, "MikroKopter vehicle connected.");
     Set_system_status(sys_status);
-    auto props = ugcs::vsm::Properties::Get_instance();
+    auto props = Properties::Get_instance();
     wp_event_value = props->Get_int("vehicle.mikrokopter.wp_event_value");
     if (wp_event_value < 0 || wp_event_value > 255) {
         VEHICLE_LOG_ERR(*this, "wp_event_value out of range, disabling WP events");
@@ -39,21 +41,21 @@ Mikrokopter_vehicle::On_enable()
     Schedule_telemetry_read();
     Request_telemetry();
 
-    telemetry_timer = ugcs::vsm::Timer_processor::Get_instance()->Create_timer(
+    telemetry_timer = Timer_processor::Get_instance()->Create_timer(
         TELEMETRY_REQUEST_INTERVAL,
-        ugcs::vsm::Make_callback(&Mikrokopter_vehicle::Request_telemetry, this),
+        Make_callback(&Mikrokopter_vehicle::Request_telemetry, this),
         Get_completion_ctx());
 
-    link_monitor_timer = ugcs::vsm::Timer_processor::Get_instance()->Create_timer(
+    link_monitor_timer = Timer_processor::Get_instance()->Create_timer(
         LINK_MONITOR_INTERVAL,
-        ugcs::vsm::Make_callback(&Mikrokopter_vehicle::Link_monitor_timer, this),
+        Make_callback(&Mikrokopter_vehicle::Link_monitor_timer, this),
         Get_completion_ctx());
 }
 
 void
 Mikrokopter_vehicle::On_disable()
 {
-    auto req = ugcs::vsm::Request::Create();
+    auto req = Request::Create();
     req->Set_processing_handler(
             Make_callback(
                     &Mikrokopter_vehicle::On_disable_handler,
@@ -64,7 +66,7 @@ Mikrokopter_vehicle::On_disable()
 }
 
 void
-Mikrokopter_vehicle::On_disable_handler(ugcs::vsm::Request::Ptr request)
+Mikrokopter_vehicle::On_disable_handler(Request::Ptr request)
 {
     link_monitor_timer->Cancel();
     link_monitor_timer = nullptr;
@@ -82,62 +84,79 @@ Mikrokopter_vehicle::On_disable_handler(ugcs::vsm::Request::Ptr request)
 }
 
 void
-Mikrokopter_vehicle::Handle_vehicle_request(ugcs::vsm::Vehicle_task_request::Handle request)
+Mikrokopter_vehicle::Handle_vehicle_request(Vehicle_task_request::Handle request)
 {
     /* Firstly clear current mission. */
     proto::Data<proto::Point> data;
     data->type = proto::Point_type::INVALID;
     task_upload_op.Abort();
+    cur_mission = std::unique_ptr<Mission>(new Mission(*this, request));
     task_upload_op = protocol->Command(Mikrokopter_protocol::Command_id::SEND_WP,
                       Mikrokopter_protocol::Address::NC,
                       std::move(data),
                       Mikrokopter_protocol::Command_id::SEND_WP_RESP,
                       Mikrokopter_protocol::Make_data_handler(
-                          &Mikrokopter_vehicle::On_task_upload, this,
-                          std::make_shared<State_info_upload_task>(request)),
+                          &Mikrokopter_vehicle::On_task_upload, this),
                       Get_completion_ctx());
 }
 
-double
-Mikrokopter_vehicle::Lookup_wait(const std::vector<ugcs::vsm::Action::Ptr> &actions,
-                                 size_t idx)
+Mikrokopter_vehicle::Mission::Mission(Mikrokopter_vehicle &vehicle,
+                                      Vehicle_task_request::Handle request):
+    vehicle(vehicle)
 {
-    while (idx < actions.size()) {
-        ugcs::vsm::Action::Ptr action = actions[idx];
-        if (action->Get_type() == ugcs::vsm::Action::Type::MOVE) {
+    si = std::make_shared<State_info_upload_task>(request);
+    while (true) {
+        proto::Data<proto::Point> wp;
+        if (!vehicle.Create_waypoint(si, wp)) {
             break;
         }
-        if (action->Get_type() == ugcs::vsm::Action::Type::WAIT) {
-            return action->Get_action<ugcs::vsm::Action::Type::WAIT>()->wait_time;
-        }
-        idx++;
+        flight_plan.emplace_back(std::move(wp));
     }
-    return 0;
 }
 
 bool
-Mikrokopter_vehicle::Retransmit_waypoint(State_info_upload_task::Ptr si,
-                                         proto::Data<proto::Point> &wp)
+Mikrokopter_vehicle::Mission::Transmit_waypoint(proto::Data<proto::Point> &wp)
 {
-    si->num_retrans++;
-    if (si->num_retrans > MAX_RETRANS) {
+    num_retrans = 0;
+    if (static_cast<size_t>(cur_item_idx + 1) >= flight_plan.size()) {
         return false;
     }
-    if (!si->num_act_processed) {
+    cur_item_idx++;
+    wp = flight_plan[cur_item_idx];
+    return true;
+}
+
+bool
+Mikrokopter_vehicle::Mission::Retransmit_waypoint(proto::Data<proto::Point> &wp)
+{
+    num_retrans++;
+    if (num_retrans > MAX_RETRANS) {
+        return false;
+    }
+    if (cur_item_idx == -1) {
         /* Retransmit clear request. */
         wp->type = proto::Point_type::INVALID;
         return true;
     }
-    if (si->panorama_range != 0.0) {
-        si->panorama_angle -= si->panorama_step;
-        si->num_uploaded--;
-        Create_panorama_wp(si, wp);
-        return true;
-    }
-    si->num_act_processed--;
-    si->num_uploaded--;
-    Create_waypoint(si, wp, true);
+    wp = flight_plan[cur_item_idx];
     return true;
+}
+
+Mikrokopter_vehicle::Mission::~Mission()
+{
+    if (si) {
+        si->Complete(Vehicle_request::Result::NOK);
+        si = nullptr;
+    }
+}
+
+void
+Mikrokopter_vehicle::Mission::Complete()
+{
+    if (si) {
+        si->Complete(Vehicle_request::Result::OK);
+        si = nullptr;
+    }
 }
 
 bool
@@ -147,6 +166,7 @@ Mikrokopter_vehicle::Create_panorama_wp(State_info_upload_task::Ptr si,
     double resid = si->panorama_range - si->panorama_angle + si->panorama_step;
     if (fabs(resid) < fabs(si->panorama_range) / 100.0) {
         si->panorama_range = 0.0;
+        si->cur_heading.Disengage();
         return false;
     }
     if (fabs(resid) > fabs(si->panorama_step)) {
@@ -163,7 +183,7 @@ Mikrokopter_vehicle::Create_panorama_wp(State_info_upload_task::Ptr si,
     wp->index = si->num_uploaded + 1;
     wp->name[0] = 'P';
 
-    int hdg = si->cur_heading + si->panorama_angle * 180.0 / M_PI +
+    int hdg = *si->cur_heading + si->panorama_angle * 180.0 / M_PI +
               (si->panorama_range > 0 ? 0.5 : -0.5);
     if (hdg > 359) {
         hdg -= 360;
@@ -176,38 +196,54 @@ Mikrokopter_vehicle::Create_panorama_wp(State_info_upload_task::Ptr si,
     wp->heading = hdg;
 
     wp->hold_time = si->panorama_delay + 0.5;
+    /* Ensure there is no zero delay, otherwise all panorama steps may be
+     * skipped instantly by flight controller.
+     */
+    if (wp->hold_time == 0) {
+        wp->hold_time = 1;
+    }
     si->panorama_angle += resid;
     si->num_uploaded++;
     return true;
 }
 
+double
+Mikrokopter_vehicle::State_info_upload_task::Lookup_wait()
+{
+    double time = 0;
+    while (num_act_processed < request->actions.size()) {
+        Action::Ptr action = request->actions[num_act_processed];
+        if (action->Get_type() != Action::Type::WAIT) {
+            break;
+        }
+        time += action->Get_action<Action::Type::WAIT>()->wait_time;
+        num_act_processed++;
+    }
+    return time;
+}
+
 bool
 Mikrokopter_vehicle::Create_waypoint(State_info_upload_task::Ptr si,
-                                     proto::Data<proto::Point> &wp,
-                                     bool is_retrans)
+                                     proto::Data<proto::Point> &wp)
 {
-    if (!is_retrans) {
-        si->num_retrans = 0;
-    }
     if (si->panorama_range != 0.0) {
         if (Create_panorama_wp(si, wp)) {
             return true;
         }
     }
     while (si->num_act_processed < si->request->actions.size()) {
-        ugcs::vsm::Action::Ptr action = si->request->actions[si->num_act_processed];
+        Action::Ptr action = si->request->actions[si->num_act_processed];
         si->num_act_processed++;
 
-        if (action->Get_type() == ugcs::vsm::Action::Type::CHANGE_SPEED) {
-            ugcs::vsm::Change_speed_action::Ptr a =
-                action->Get_action<ugcs::vsm::Action::Type::CHANGE_SPEED>();
+        if (action->Get_type() == Action::Type::CHANGE_SPEED) {
+            Change_speed_action::Ptr a =
+                action->Get_action<Action::Type::CHANGE_SPEED>();
             si->speed = a->speed;
 
-        } else if (action->Get_type() == ugcs::vsm::Action::Type::MOVE) {
-            ugcs::vsm::Move_action::Ptr a =
-                action->Get_action<ugcs::vsm::Action::Type::MOVE>();
-            wp->hold_time = Lookup_wait(si->request->actions,
-                                        si->num_act_processed + 1);
+        } else if (action->Get_type() == Action::Type::MOVE) {
+            Move_action::Ptr a =
+                action->Get_action<Action::Type::MOVE>();
+            wp->hold_time = si->Lookup_wait();
             wp->type = proto::Point_type::WP;
             wp->index = si->num_uploaded + 1;
             if (a->acceptance_radius < 0.1) {
@@ -221,8 +257,13 @@ Mikrokopter_vehicle::Create_waypoint(State_info_upload_task::Ptr si,
                 si->tolerance_radius = a->acceptance_radius + 0.5;
             }
             wp->tolerance_radius = si->tolerance_radius;
-            wp->heading = si->cur_heading;
-            ugcs::vsm::Geodetic_tuple pos = a->position.Get_geodetic();
+            wp->heading = si->Get_heading();
+            si->cur_heading.Disengage();
+            if (wp->heading == 0) {
+                /* Set current waypoint as POI. */
+                wp->heading = -(si->num_uploaded + 1);
+            }
+            Geodetic_tuple pos = a->position.Get_geodetic();
             pos.altitude -= si->launch_elevation;
             si->last_position = pos;
             wp->position = proto::Gps_pos::From_position(pos);
@@ -234,30 +275,31 @@ Mikrokopter_vehicle::Create_waypoint(State_info_upload_task::Ptr si,
             si->num_uploaded++;
             return true;
 
-        } else if (action->Get_type() == ugcs::vsm::Action::Type::POI) {
-            ugcs::vsm::Poi_action::Ptr a =
-                action->Get_action<ugcs::vsm::Action::Type::POI>();
+        } else if (action->Get_type() == Action::Type::POI) {
+            Poi_action::Ptr a =
+                action->Get_action<Action::Type::POI>();
             if (a->active) {
+                si->cur_heading.Disengage();
                 wp->type = proto::Point_type::POI;
-                ugcs::vsm::Geodetic_tuple pos = a->position.Get_geodetic();
+                Geodetic_tuple pos = a->position.Get_geodetic();
                 pos.altitude -= si->launch_elevation;
                 wp->position = proto::Gps_pos::From_position(pos);
                 wp->index = si->num_uploaded + 1;
                 wp->name[0] = 'P';
-                si->cur_heading = -wp->index;
+                si->cur_poi = wp->index;
                 si->num_uploaded++;
                 return true;
             }
-            si->cur_heading = 0;
+            si->cur_poi.Disengage();
 
-        } else if (action->Get_type() == ugcs::vsm::Action::Type::HEADING) {
-            ugcs::vsm::Heading_action::Ptr a =
-                action->Get_action<ugcs::vsm::Action::Type::HEADING>();
+        } else if (action->Get_type() == Action::Type::HEADING) {
+            Heading_action::Ptr a =
+                action->Get_action<Action::Type::HEADING>();
             si->cur_heading = a->heading * 180.0 / M_PI;
 
-        } else if (action->Get_type() == ugcs::vsm::Action::Type::WAIT) {
-            ugcs::vsm::Wait_action::Ptr a =
-                action->Get_action<ugcs::vsm::Action::Type::WAIT>();
+        } else if (action->Get_type() == Action::Type::WAIT) {
+            Wait_action::Ptr a =
+                action->Get_action<Action::Type::WAIT>();
             if (si->last_position) {
                 wp->position = proto::Gps_pos::From_position(*si->last_position);
                 wp->tolerance_radius = si->tolerance_radius;
@@ -268,15 +310,15 @@ Mikrokopter_vehicle::Create_waypoint(State_info_upload_task::Ptr si,
                 wp->type = proto::Point_type::WP;
                 wp->index = si->num_uploaded + 1;
                 wp->name[0] = 'P';
-                wp->heading = si->cur_heading;
+                wp->heading = si->Get_heading();
                 wp->hold_time = a->wait_time;
                 si->num_uploaded++;
                 return true;
             }
 
-        } else if (action->Get_type() == ugcs::vsm::Action::Type::PANORAMA) {
-            ugcs::vsm::Panorama_action::Ptr a =
-                action->Get_action<ugcs::vsm::Action::Type::PANORAMA>();
+        } else if (action->Get_type() == Action::Type::PANORAMA) {
+            Panorama_action::Ptr a =
+                action->Get_action<Action::Type::PANORAMA>();
 
             si->panorama_range = a->angle;
             if (a->angle > 0) {
@@ -299,11 +341,9 @@ Mikrokopter_vehicle::Create_waypoint(State_info_upload_task::Ptr si,
             }
 
             si->panorama_angle = si->panorama_step;
-
-            if (si->cur_heading < 0) {
+            if (!si->cur_heading) {
                 si->cur_heading = 0;
             }
-
             wp->position = proto::Gps_pos::From_position(*si->last_position);
             wp->tolerance_radius = si->tolerance_radius;
             wp->speed = si->speed * 10;
@@ -313,7 +353,7 @@ Mikrokopter_vehicle::Create_waypoint(State_info_upload_task::Ptr si,
             wp->type = proto::Point_type::WP;
             wp->index = si->num_uploaded + 1;
             wp->name[0] = 'P';
-            wp->heading = si->cur_heading;
+            wp->heading = *si->cur_heading;
             if (wp->heading.Get() == 0) {
                 wp->heading = 1;
             }
@@ -321,12 +361,12 @@ Mikrokopter_vehicle::Create_waypoint(State_info_upload_task::Ptr si,
             si->num_uploaded++;
             return true;
 
-        } else if (action->Get_type() == ugcs::vsm::Action::Type::CAMERA_CONTROL) {
-            ugcs::vsm::Camera_control_action::Ptr a =
-                action->Get_action<ugcs::vsm::Action::Type::CAMERA_CONTROL>();
+        } else if (action->Get_type() == Action::Type::CAMERA_CONTROL) {
+            Camera_control_action::Ptr a =
+                action->Get_action<Action::Type::CAMERA_CONTROL>();
             si->cur_camera_angle = a->tilt * 180.0 / M_PI;
 
-        } else if (action->Get_type() == ugcs::vsm::Action::Type::CAMERA_TRIGGER) {
+        } else if (action->Get_type() == Action::Type::CAMERA_TRIGGER) {
             if (si->last_position && wp_event_value) {
                 wp->position = proto::Gps_pos::From_position(*si->last_position);
                 wp->tolerance_radius = si->tolerance_radius;
@@ -337,7 +377,7 @@ Mikrokopter_vehicle::Create_waypoint(State_info_upload_task::Ptr si,
                 wp->type = proto::Point_type::WP;
                 wp->index = si->num_uploaded + 1;
                 wp->name[0] = 'P';
-                wp->heading = si->cur_heading;
+                wp->heading = si->Get_heading();
                 int wp_time = std::ceil(wp_event_value * 8.0 / 100.0);
                 wp->hold_time = wp_time;
                 si->num_uploaded++;
@@ -345,47 +385,68 @@ Mikrokopter_vehicle::Create_waypoint(State_info_upload_task::Ptr si,
             }
         }
     }
+    /* Create dummy waypoint to cancel all previous yaw control and make
+     * working just usual care-free control.
+     */
+    if (!si->final_poi_unset && si->last_position) {
+        si->final_poi_unset = true;
+        wp->position = proto::Gps_pos::From_position(*si->last_position);
+        wp->tolerance_radius = si->tolerance_radius;
+        wp->speed = si->speed * 10;
+        wp->altitude_rate = si->speed * 10;
+        wp->wp_event_channel_value = wp_event_value;
+        wp->cam_angle = si->cur_camera_angle;
+        wp->type = proto::Point_type::WP;
+        wp->index = si->num_uploaded + 1;
+        wp->name[0] = 'P';
+        wp->heading = 0;
+        wp->hold_time = 0;
+        si->num_uploaded++;
+    }
     return false;
 }
 
 void
-Mikrokopter_vehicle::On_task_upload(ugcs::vsm::Io_result result,
-                                    Mikrokopter_protocol::Data_ptr data,
-                                    State_info_upload_task::Ptr si)
+Mikrokopter_vehicle::On_task_upload(Io_result result,
+                                    Mikrokopter_protocol::Data_ptr data)
 {
     proto::Data<proto::Point> wp;
-    if (result != ugcs::vsm::Io_result::OK ||
-        proto::Data<proto::Send_wp_response>(*data)->count != si->num_uploaded) {
+    if (result != Io_result::OK ||
+        proto::Data<proto::Send_wp_response>(*data)->count != cur_mission->cur_item_idx + 1) {
 
-        if (result == ugcs::vsm::Io_result::TIMED_OUT ||
-            (data && proto::Data<proto::Send_wp_response>(*data)->count == si->num_uploaded - 1)) {
+        if (result == Io_result::TIMED_OUT ||
+            (data && proto::Data<proto::Send_wp_response>(*data)->count == cur_mission->cur_item_idx)) {
 
-            if (Retransmit_waypoint(si, wp)) {
-                if (si->num_uploaded) {
-                    VEHICLE_LOG_WRN(*this, "Waypoint [%zu] uploading failed, retrying",
-                                si->num_uploaded - 1);
+            if (cur_mission->Retransmit_waypoint(wp)) {
+                if (cur_mission->cur_item_idx >= 0) {
+                    VEHICLE_LOG_WRN(*this, "Waypoint [%d] uploading failed, retrying",
+                                    cur_mission->cur_item_idx);
                 } else {
                     VEHICLE_LOG_WRN(*this, "Waypoint clear request failed, retrying");
                 }
             } else {
                 VEHICLE_LOG_WRN(*this, "Mission upload failed after retransmissions");
+                cur_mission = nullptr;
                 protocol->Close();
+
                 return;
             }
         } else {
             if (data) {
-                VEHICLE_LOG_WRN(*this, "Mission upload failed, result [%d] count [%d] num_uploaded [%zu]",
-                            result, proto::Data<proto::Send_wp_response>(*data)->count,
-                            si->num_uploaded);
+                VEHICLE_LOG_WRN(*this, "Mission upload failed, result [%d] count [%d] num_uploaded [%d]",
+                                result, proto::Data<proto::Send_wp_response>(*data)->count,
+                                cur_mission->cur_item_idx);
             } else {
                 VEHICLE_LOG_WRN(*this, "Mission upload failed, result [%d]", result);
             }
+            cur_mission = nullptr;
             protocol->Close();
             return;
         }
-    } else if (!Create_waypoint(si, wp)) {
+    } else if (!cur_mission->Transmit_waypoint(wp)) {
         /* All actions processed. */
-        si->Complete();
+        cur_mission->Complete();
+        cur_mission = nullptr;
         return;
     }
     task_upload_op.Abort();
@@ -394,12 +455,12 @@ Mikrokopter_vehicle::On_task_upload(ugcs::vsm::Io_result result,
                       std::move(wp),
                       Mikrokopter_protocol::Command_id::SEND_WP_RESP,
                       Mikrokopter_protocol::Make_data_handler(
-                          &Mikrokopter_vehicle::On_task_upload, this, si),
+                          &Mikrokopter_vehicle::On_task_upload, this),
                       Get_completion_ctx());
 }
 
 void
-Mikrokopter_vehicle::Handle_vehicle_request(ugcs::vsm::Vehicle_clear_all_missions_request::Handle request)
+Mikrokopter_vehicle::Handle_vehicle_request(Vehicle_clear_all_missions_request::Handle request)
 {
     proto::Data<proto::Point> data;
     data->type = proto::Point_type::INVALID;
@@ -416,9 +477,9 @@ Mikrokopter_vehicle::Handle_vehicle_request(ugcs::vsm::Vehicle_clear_all_mission
 }
 
 void
-Mikrokopter_vehicle::Handle_vehicle_request(ugcs::vsm::Vehicle_command_request::Handle request)
+Mikrokopter_vehicle::Handle_vehicle_request(Vehicle_command_request::Handle request)
 {
-    if (request->Get_type() == ugcs::vsm::Vehicle_command::Type::RETURN_HOME) {
+    if (request->Get_type() == Vehicle_command::Type::RETURN_HOME) {
         proto::Data<proto::Point> data;
             data->type = proto::Point_type::INVALID;
             /* Send waypoint with invalid position which is treated as clearing. */
@@ -436,11 +497,11 @@ Mikrokopter_vehicle::Handle_vehicle_request(ugcs::vsm::Vehicle_command_request::
 }
 
 void
-Mikrokopter_vehicle::On_mission_clear(ugcs::vsm::Io_result result,
+Mikrokopter_vehicle::On_mission_clear(Io_result result,
                                       Mikrokopter_protocol::Data_ptr data,
                                       State_info_clear_mission::Ptr si)
 {
-    if (result == ugcs::vsm::Io_result::OK &&
+    if (result == Io_result::OK &&
         proto::Data<proto::Send_wp_response>(*data)->count == 0) {
 
         si->Complete();
@@ -451,12 +512,12 @@ Mikrokopter_vehicle::On_mission_clear(ugcs::vsm::Io_result result,
 }
 
 void
-Mikrokopter_vehicle::On_command(ugcs::vsm::Io_result result,
+Mikrokopter_vehicle::On_command(Io_result result,
                                 Mikrokopter_protocol::Data_ptr data,
                                 State_info_command::Ptr si)
 {
-    if (si->request->Get_type() == ugcs::vsm::Vehicle_command::Type::RETURN_HOME) {
-        if (result == ugcs::vsm::Io_result::OK &&
+    if (si->request->Get_type() == Vehicle_command::Type::RETURN_HOME) {
+        if (result == Io_result::OK &&
             proto::Data<proto::Send_wp_response>(*data)->count == 0) {
 
             si->Complete();
@@ -479,8 +540,8 @@ Mikrokopter_vehicle::Request_telemetry()
             Mikrokopter_protocol::Address::NC,
             std::move(data),
             Mikrokopter_protocol::Command_id::NONE,
-            ugcs::vsm::Make_dummy_callback<void, ugcs::vsm::Io_result,
-                                     Mikrokopter_protocol::Data_ptr>(),
+            Make_dummy_callback<void, Io_result,
+                                Mikrokopter_protocol::Data_ptr>(),
             Get_completion_ctx());
     return true;
 }
@@ -501,28 +562,28 @@ Mikrokopter_vehicle::On_telemetry(Mikrokopter_protocol::Data_ptr data)
     auto nav = proto::Data<proto::Navi_data>(*data);
     auto report = Open_telemetry_report();
 
-    report->Set<ugcs::vsm::tm::Battery_voltage>(static_cast<double>(nav->bat_voltage) / 10);
+    report->Set<tm::Battery_voltage>(static_cast<double>(nav->bat_voltage) / 10);
 
-    report->Set<ugcs::vsm::tm::Battery_current>(static_cast<double>(nav->current) / 10);
+    report->Set<tm::Battery_current>(static_cast<double>(nav->current) / 10);
 
-    report->Set<ugcs::vsm::tm::Position>(nav->current_position.Get_position_telemetry());
+    report->Set<tm::Position>(nav->current_position.Get_position_telemetry());
 
-    report->Set<ugcs::vsm::tm::Gps_satellites_count>(nav->satellites_in_use);
+    report->Set<tm::Gps_satellites_count>(nav->satellites_in_use);
 
-    report->Set<ugcs::vsm::tm::Ground_speed>(static_cast<double>(nav->ground_speed) / 100);
+    report->Set<tm::Ground_speed>(static_cast<double>(nav->ground_speed) / 100);
 
-    report->Set<ugcs::vsm::tm::Course>(nav->heading.Get() / 180.0 * M_PI);
+    report->Set<tm::Course>(nav->heading.Get() / 180.0 * M_PI);
 
-    report->Set<ugcs::vsm::tm::Attitude::Pitch>(-static_cast<double>(nav->pitch) / 180.0 * M_PI);
+    report->Set<tm::Attitude::Pitch>(-static_cast<double>(nav->pitch) / 180.0 * M_PI);
 
-    report->Set<ugcs::vsm::tm::Attitude::Roll>(-static_cast<double>(nav->roll) / 180.0 * M_PI);
+    report->Set<tm::Attitude::Roll>(-static_cast<double>(nav->roll) / 180.0 * M_PI);
 
-    report->Set<ugcs::vsm::tm::Attitude::Yaw>(static_cast<double>(nav->yaw) / 180.0 * M_PI);
+    report->Set<tm::Attitude::Yaw>(static_cast<double>(nav->yaw) / 180.0 * M_PI);
 
-    report->Set<ugcs::vsm::tm::Climb_rate>(nav->variometer.Get());//XXX units?
+    report->Set<tm::Climb_rate>(static_cast<double>(nav->top_speed.Get()) / 100.0);
 
     /* No information about units. 1:21 ratio was found experimentally. */
-    report->Set<ugcs::vsm::tm::Rel_altitude>(static_cast<double>(nav->altimeter.Get()) / 20.0);
+    report->Set<tm::Rel_altitude>(static_cast<double>(nav->altimeter.Get()) / 20.0);
 
     if (nav->nc_flags & static_cast<uint8_t>(proto::Nc_flags::CH)) {
         sys_status.control_mode = Sys_status::Control_mode::AUTO;
@@ -564,7 +625,7 @@ Mikrokopter_vehicle::Link_monitor_timer()
 
     last_link_quality = last_link_quality * (1.0 - LINK_QUALITY_RA_QUOT) +
         LINK_QUALITY_RA_QUOT * q;
-    report->Set<ugcs::vsm::tm::Link_quality>(last_link_quality);
+    report->Set<tm::Link_quality>(last_link_quality);
 
     if (!echo_active) {
         echo_active = true;
@@ -586,10 +647,10 @@ Mikrokopter_vehicle::Link_monitor_timer()
 }
 
 void
-Mikrokopter_vehicle::Echo_handler(ugcs::vsm::Io_result result,
+Mikrokopter_vehicle::Echo_handler(Io_result result,
                                   Mikrokopter_protocol::Data_ptr pkt)
 {
-    if (result != ugcs::vsm::Io_result::OK ||
+    if (result != Io_result::OK ||
         proto::Data<proto::Echo>(*pkt)->pattern != ECHO_PATTERN) {
 
         lost_echo_count++;
@@ -604,7 +665,7 @@ Mikrokopter_vehicle::Echo_handler(ugcs::vsm::Io_result result,
         echo_active = false;
         if (lost_echo_count) {
             VEHICLE_LOG_INF(*this, "Echo reception continued after %d loses",
-                     lost_echo_count);
+                            lost_echo_count);
             lost_echo_count = 0;
         }
     }

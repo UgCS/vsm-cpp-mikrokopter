@@ -243,6 +243,10 @@ public:
 
     Data(const Data &) = default;
     Data(Data &&) = default;
+    Data &
+    operator=(const Data &) = default;
+    Data &
+    operator=(Data &&) = default;
 
     PayloadType &
     operator *()

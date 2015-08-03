@@ -72,6 +72,8 @@ Camera trigger  |  Partial   | Only photo shot is supported. |
 Panorama        |  Partial   | Panorama is always counted from North or last set heading |
 Take-off        |  No        |  |
 Landing         |  No        |  |
+Set camera by time | No |  |
+Set camera by distance | No |  |
 
 Take-off and landing is not supported in scope of automatic mission execution.
 You should take-off or land the drone either manually or using auto-start/landing
@@ -79,7 +81,7 @@ feature of the MikroKopter which can be activated by switch on RC. See MikroKopt
 vendor documentation.
 
 CareFree feature must be enabled in MikroKopter for all actions which
-automatically control copter heading (like POI, heading set etc.) See
+automatically control copter heading (like POI, yaw set etc.) See
 http://www.mikrokopter.de/ucwiki/en/CareFree
 
 None of fail-safe mode adjustments is supported in the U[g]CS mission parameters.
@@ -142,7 +144,7 @@ Configuration file location:
 
 - <b>On Microsoft Windows:</b>
 
-         C:\Program Files (x86)\UgCS\vsm-mikrokopter\vsm-mikrokopter.conf
+         C:\Program Files (x86)\UgCS\bin\vsm-mikrokopter.conf
 
 - <b>On GNU/Linux:</b>
 

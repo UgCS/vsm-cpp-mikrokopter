@@ -10,6 +10,8 @@
 #include <signal.h>
 #endif /* __unix__ */
 
+using namespace ugcs::vsm;
+
 Vehicle_manager vm;
 /** Separate main thread when running as service. */
 std::thread main_thread;
@@ -25,11 +27,11 @@ void Sigint_handler(int signum __UNUSED)
 void
 Main(int argc, char **argv)
 {
-    ugcs::vsm::Initialize(argc, argv, "vsm-mikrokopter.conf");
+    Initialize(argc, argv, "vsm-mikrokopter.conf");
     vm.Enable();
     vm.Run();
     vm.Disable();
-    ugcs::vsm::Terminate();
+    Terminate();
 }
 
 int
@@ -50,10 +52,10 @@ Stop_main()
 int
 main(int argc, char *argv[])
 {
-    auto ret = ugcs::vsm::Run_as_service("ugcs-vsm-mikrokopter", argc, argv,
-                            ugcs::vsm::Make_program_init_handler(Start_main),
-                            ugcs::vsm::Make_callback(Stop_main));
-    if (ret != ugcs::vsm::SERVICE_RESULT_NORMAL_INVOCATION) {
+    auto ret = Run_as_service("ugcs-vsm-mikrokopter", argc, argv,
+                              Make_program_init_handler(Start_main),
+                              Make_callback(Stop_main));
+    if (ret != SERVICE_RESULT_NORMAL_INVOCATION) {
         return ret;
     }
 

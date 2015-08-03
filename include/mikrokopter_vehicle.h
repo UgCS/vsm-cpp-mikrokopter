@@ -121,10 +121,10 @@ private:
         double speed = 3.0;
         /** Retransmissions counter. */
         int num_retrans = 0;
-        /** Current heading value in degrees. 0 - default behavior, negative
-         * values - POI index. See proto::Point::heading.
-         */
-        int cur_heading = 0;
+        /** Current heading value in degrees. */
+        ugcs::vsm::Optional<int> cur_heading;
+        /** Current POI index. */
+        ugcs::vsm::Optional<int> cur_poi;
         /** Last waypoint position. */
         ugcs::vsm::Optional<ugcs::vsm::Geodetic_tuple> last_position;
         /** Last waypoint tolerance radius in meters. */
@@ -141,13 +141,78 @@ private:
                panorama_delay;
         /** Camera angle (pitch? deg?). */
         int cur_camera_angle = 0;
+        /** True if dummy waypoint for unsetting POI is received. */
+        bool final_poi_unset = false;
 
         State_info_upload_task(const ugcs::vsm::Vehicle_task_request::Handle &request):
             State_info(request)
         {
             launch_elevation = this->request->Get_takeoff_altitude();
         }
+
+        /** Check if next action(s) is(are) wait. Consume them and return
+         * accumulated wait time for them.
+         */
+        double
+        Lookup_wait();
+
+        /** Get heading value for waypoint structure.
+         * @return Value to set in proto::Point::heading. Zero - not set.
+         */
+        int
+        Get_heading()
+        {
+            if (cur_heading) {
+                if (*cur_heading == 0) {
+                    return 1;
+                }
+                return *cur_heading;
+            }
+            if (cur_poi) {
+                return -*cur_poi;
+            }
+            return 0;
+        }
     };
+
+    /** Mission being uploaded. */
+    class Mission {
+    public:
+        Mission(Mikrokopter_vehicle &vehicle,
+                ugcs::vsm::Vehicle_task_request::Handle request);
+
+        ~Mission();
+
+        void
+        Complete();
+
+        /** Initialize waypoint descriptor with next transmitted waypoint data.
+         *
+         * @return true if waypoint for created, false if all waypoints transmitted.
+         */
+        bool
+        Transmit_waypoint(proto::Data<proto::Point> &wp);
+
+        /** Create waypoint descriptor for last transmitted one.
+         *
+         * @return true if waypoint for retransmission created, false if
+         *      retransmissions limit exceeded.
+         */
+        bool
+        Retransmit_waypoint(proto::Data<proto::Point> &wp);
+
+        Mikrokopter_vehicle &vehicle;
+        State_info_upload_task::Ptr si;
+        /** Generated flight plan. */
+        std::vector<proto::Data<proto::Point>> flight_plan;
+        /** Index of the currently item being uploaded. -1 for clear request. */
+        int cur_item_idx = -1;
+        /** Number of retransmissions for current item. */
+        int num_retrans = 0;
+    };
+
+    /** Current mission being uploaded. */
+    std::unique_ptr<Mission> cur_mission;
 
     /** Enable handler. */
     virtual void
@@ -185,8 +250,7 @@ private:
 
     /** Mission cleared before upload. */
     void
-    On_task_upload(ugcs::vsm::Io_result result, Mikrokopter_protocol::Data_ptr data,
-                   State_info_upload_task::Ptr si);
+    On_task_upload(ugcs::vsm::Io_result result, Mikrokopter_protocol::Data_ptr data);
 
     /** Create next waypoint descriptor.
      *
@@ -194,8 +258,7 @@ private:
      */
     bool
     Create_waypoint(State_info_upload_task::Ptr si,
-                    proto::Data<proto::Point> &wp,
-                    bool is_retrans = false);
+                    proto::Data<proto::Point> &wp);
 
     /** Create next waypoint for panorama action.
      *
@@ -204,22 +267,6 @@ private:
     bool
     Create_panorama_wp(State_info_upload_task::Ptr si,
                        proto::Data<proto::Point> &wp);
-
-    /** Create waypoint descriptor for last transmitted one.
-     *
-     * @return true if waypoint for retransmission created, false if
-     *      retransmissions limit exceeded.
-     */
-    bool
-    Retransmit_waypoint(State_info_upload_task::Ptr si, proto::Data<proto::Point> &wp);
-
-    /** Check if there is a wait action before next move action.
-     * @param actions Actions to check.
-     * @param idx Start index for actions to check.
-     * @return Delay in seconds if wait action found, zero otherwise.
-     */
-    double
-    Lookup_wait(const std::vector<ugcs::vsm::Action::Ptr> &actions, size_t idx);
 
     bool
     Request_telemetry();
