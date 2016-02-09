@@ -26,6 +26,11 @@ Vehicle_manager::Enable()
             Transport_detector::Make_connect_handler(
                 &Vehicle_manager::Port_connect_handler, this),
             proc_context);
+    Transport_detector::Get_instance()->Add_detector(
+            "vehicle.mikrokopter.tcp",
+            Transport_detector::Make_connect_handler(
+                &Vehicle_manager::Port_connect_handler, this),
+            proc_context);
 }
 
 void

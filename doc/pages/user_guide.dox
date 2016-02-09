@@ -1,6 +1,6 @@
 /**
 
-@page vsm_user_guide MikroKopter VSM User Guide
+@page vsm_user_guide Connecting MikroKopter autopilot to UgCS
 
 @image latex ugcs-logo.png "" width=3cm
 @image latex main-vsm-logo.png "" width=3cm
@@ -28,13 +28,15 @@ refer to your communication equipment manufacturer documentation about driver
 installation instructions.
 
 3. Open _Vehicles_ window in U[g]CS Client and wait until new vehicle appears there
-automatically. Both Uplink and Downlink connections should be available. Press
-_Gain control_ and _Edit_ to select corresponding vehicle profile and change the default
-vehicle name to be convenient for you:
+automatically. Both Uplink and Downlink connections should be available. Choose the
+corresponding vehicle for editing by clicking on the menu item and selecting 
+_Edit_ button. Now you can select the vehicle profile and change the default vehicle
+name to be convenient for you:
 @image html new-mk-vehicle.png "New MikroKopter vehicle"
 @image latex new-mk-vehicle.png "New MikroKopter vehicle" width=15cm
 Vehicle profile needs to be assigned to allow mission planning with this vehicle.
-Image needs to be assigned to see vehicle location on the map.
+Vehicle avatar should be assigned in vehicle profile to properly see the vehicle
+location on map.
 
 4. Repeat steps above for each your MikroKopter vehicle.
 
@@ -87,6 +89,9 @@ http://www.mikrokopter.de/ucwiki/en/CareFree
 None of fail-safe mode adjustments is supported in the U[g]CS mission parameters.
 Use MikroKopter original software instead to set up fail-safe parameters.
 
+Home position can not be changed from software. It is controlled by the autopilot hardware and
+always corresponds to launch position.
+
 @subsection mes_camera_trigger Camera trigger action
 
 Can be used to trigger payload-specific action during mission execution. It
@@ -113,16 +118,21 @@ In KopterTool output configuration ensure you have set "Combine with WP-event"
 option.
 
 @section command_execution_specifics Command execution specifics
+
 Command        | Support  | Notes
 ---------------|----------|---------
-ARM            |  No      |  |
-DISARM         |  No      |  |
-AUTOMODE       |  No      |  |
-MANUALMODE     |  No      |  |
-RETURNHOME     |  Yes     | Current mission is erased in the device. It should be uploaded again in order to run it. Works only when the drone is in AUTO mode. |
-TAKEOFF        |  No      |  |
-LAND           |  No      |  |
-EMERGENCYLAND  |  No      |  |
+ARM            |  No      | |
+DISARM         |  No      | |
+AUTOMODE       |  No      | |
+MANUALMODE     |  No      | |
+CLICK & GO     |  No      | |
+HOLD           |  No      | |
+CONTINUE       |  No      | |
+RETURN HOME    |  Yes     | Current mission is erased in the device. It should be uploaded again in order to run it. Works only when the drone is in AUTO mode. |
+TAKEOFF        |  No      | |
+LAND           |  No      | |
+EMERGENCYLAND  |  No      | |
+CAMERA_TRIGGER |  No      | |
 
 Use your RC to execute commands and switch between flight modes according to
 the manufacturer instructions.

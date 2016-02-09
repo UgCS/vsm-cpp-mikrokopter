@@ -568,6 +568,8 @@ Mikrokopter_vehicle::On_telemetry(Mikrokopter_protocol::Data_ptr data)
 
     report->Set<tm::Position>(nav->current_position.Get_position_telemetry());
 
+    report->Set<tm::Home_position>(nav->home_position.Get_position_telemetry());
+
     report->Set<tm::Gps_satellites_count>(nav->satellites_in_use);
 
     report->Set<tm::Ground_speed>(static_cast<double>(nav->ground_speed) / 100);
