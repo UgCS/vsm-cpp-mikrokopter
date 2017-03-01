@@ -10,24 +10,24 @@
 
 See @ref vsm_disclaimer.
 
-Please follow these steps to connect an MikroKopter vehicle to the U[g]CS:
+Please follow these steps to connect an MikroKopter vehicle to the UgCS:
 
 1. MikroKopter vehicle must be properly configured, calibrated and
 tested using tools and instruction from the official
-[MikroKopter web site](http://mikrokopter.de/) prior to using it with U[g]CS.
-U[g]CS does not support initial configuration, setup and calibration of MikroKopter
+[MikroKopter web site](http://mikrokopter.de/) prior to using it with UgCS.
+UgCS does not support initial configuration, setup and calibration of MikroKopter
 vehicles.
 
 2. Turn on the vehicle and plug in the radio modem paired with the vehicle or
 direct USB cable from the MikroKopter board to the computer where VSM is running.
-U[g]CS uses serial ports for communication with MikroKopter vehicles. Serial
+UgCS uses serial ports for communication with MikroKopter vehicles. Serial
 interface based communication devices like WI232 radio modems (and their analogs)
 and direct USB-serial connections are supported, as long as OS driver for
 virtual serial port is installed and serial port is successfully created. Please
 refer to your communication equipment manufacturer documentation about driver
 installation instructions.
 
-3. Open _Vehicles_ window in U[g]CS Client and wait until new vehicle appears there
+3. Open _Vehicles_ window in UgCS Client and wait until new vehicle appears there
 automatically. Both Uplink and Downlink connections should be available. Choose the
 corresponding vehicle for editing by clicking on the menu item and selecting 
 _Edit_ button. Now you can select the vehicle profile and change the default vehicle
@@ -65,7 +65,8 @@ Supported MikroKopter firmware versions:
 
 @section mission_execution_specifics Mission execution specifics
 
-Before executing a mission, Mikrokopter must be set to Altitude hold mode and throttle must be in mid position!
+Before executing a mission, Mikrokopter must be set to Altitude hold mode and throttle must be in 
+middle position!
 
 Flight plan element / action | Support | Notes
 -----------------------------|---------|---------
@@ -73,12 +74,15 @@ Camera control  |  Partial   | Only pitch control is supported.   |
 Camera trigger  |  Partial   | Only photo shot is supported. |
 Panorama        |  Partial   | Panorama is always counted from North or last set heading |
 Take-off        |  No        |  |
-Landing         |  No        |  |
+Landing         |  Yes       |  |
 Set camera by time | No |  |
-Set camera by distance | No |  |
+Set camera by distance | Yes |  |
+POI             | Yes |  |
+Heading         | Yes |  |
+Wait            | Yes |  |
 
-Take-off and landing is not supported in scope of automatic mission execution.
-You should take-off or land the drone either manually or using auto-start/landing
+Take-off is not supported in scope of automatic mission execution.
+You should take-off the drone either manually or using auto-start
 feature of the MikroKopter which can be activated by switch on RC. See MikroKopter
 vendor documentation.
 
@@ -86,8 +90,9 @@ CareFree feature must be enabled in MikroKopter for all actions which
 automatically control copter heading (like POI, yaw set etc.) See
 http://www.mikrokopter.de/ucwiki/en/CareFree
 
-None of fail-safe mode adjustments is supported in the U[g]CS mission parameters.
-Use MikroKopter original software instead to set up fail-safe parameters.
+None of fail-safe mode adjustments is supported in the UgCS mission parameters (as well as
+emergency return altitude value). Use MikroKopter original software instead to set up fail-safe 
+parameters.
 
 Home position can not be changed from software. It is controlled by the autopilot hardware and
 always corresponds to launch position.
@@ -126,6 +131,7 @@ DISARM         |  No      | |
 AUTOMODE       |  No      | |
 MANUALMODE     |  No      | |
 CLICK & GO     |  No      | |
+JOYSTICK       |  No      | |
 HOLD           |  No      | |
 CONTINUE       |  No      | |
 RETURN HOME    |  Yes     | Current mission is erased in the device. It should be uploaded again in order to run it. Works only when the drone is in AUTO mode. |

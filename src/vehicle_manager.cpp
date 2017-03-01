@@ -109,7 +109,8 @@ Vehicle_manager::Protocol_ready_handler(Port *port)
         return;
     }
     LOG_INFO("MikroKopter ready on port %s", port->stream->Get_name().c_str());
-    std::string sn = port->protocol->Get_serial_number();
+    //XXX no serial number support in protocol for now
+    std::string sn = port->protocol->Get_port_name();
     auto it = vehicles.find(sn);
     if (it == vehicles.end()) {
         it = vehicles.emplace(sn, Mikrokopter_vehicle::Create(port->protocol)).first;
@@ -126,8 +127,8 @@ void
 Vehicle_manager::Disconnect_vehicle(Mikrokopter_vehicle::Ptr vehicle)
 {
     vehicle->Disable();
-    vehicles.erase(vehicle->Get_serial_number());
-    LOG_INFO("MikroKopter vehicle disconnected, serial number '%s'",
+    vehicles.erase(vehicle->Get_serial_number());//XXX no serial number
+    LOG_INFO("MikroKopter vehicle disconnected, port '%s'",
              vehicle->Get_serial_number().c_str());
 }
 

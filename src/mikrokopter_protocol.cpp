@@ -5,6 +5,9 @@
 #include <mikrokopter_protocol.h>
 #include <protocol_data.h>
 
+#include <sstream>
+
+
 using namespace ugcs::vsm;
 
 /* ****************************************************************************/
@@ -119,11 +122,8 @@ constexpr std::chrono::milliseconds Mikrokopter_protocol::DEFAULT_TIMEOUT;
 
 Mikrokopter_protocol::Mikrokopter_protocol(Io_stream::Ref stream):
     Request_processor("Mikrokopter protocol processor"),
-    stream(stream),
-    serial_number(stream->Get_name())
-{
-
-}
+    stream(stream)
+{}
 
 void
 Mikrokopter_protocol::On_enable()
@@ -155,7 +155,7 @@ Mikrokopter_protocol::On_enable_handler(Request::Ptr request)
     Send_packet(Io_buffer::Create(magic_pkt, sizeof(magic_pkt)));
 
     /* Start detection. */
-    proto::Data<proto::Echo> data;
+    mk_proto::Data<mk_proto::Echo> data;
     data->pattern = DETECTION_PATTERN;
     link_detection_op = Command(
             Command_id::LINK_TEST, Address::NC, std::move(data),
@@ -227,7 +227,7 @@ void
 Mikrokopter_protocol::Schedule_read()
 {
     read_op.Abort();
-    read_op = stream->Read(1, 1,
+    read_op = stream->Read(MIN_UDP_PAYLOAD_SIZE_TO_READ, 1,
                  Make_read_callback(&Mikrokopter_protocol::On_data_received,
                                     this),
                  comp_ctx);
@@ -337,7 +337,7 @@ void
 Mikrokopter_protocol::Handle_send(Io_result result)
 {
     if (result != Io_result::OK) {
-        LOG_WARNING("Packet sending failed, result %d", result);
+        LOG_WARNING("Packet sending failed, result %d", static_cast<int>(result));
     }
     write_queue.pop_front();
     if (write_queue.size()) {
@@ -454,7 +454,7 @@ Mikrokopter_protocol::On_data_received(Io_buffer::Ptr buf, Io_result result)
         }
         Schedule_read();
     } else {
-        LOG_INFO("Stream read failed, closing: %d", result);
+        LOG_INFO("Stream read failed, closing: %d", static_cast<int>(result));
         stream->Close();
         state = State::CLOSED;
     }
@@ -547,7 +547,7 @@ void
 Mikrokopter_protocol::Detection_handler(Io_result result, Data_ptr pkt)
 {
     if (result == Io_result::OK &&
-        proto::Data<proto::Echo>(*pkt)->pattern == DETECTION_PATTERN) {
+        mk_proto::Data<mk_proto::Echo>(*pkt)->pattern == DETECTION_PATTERN) {
 
         state = State::OPERATIONAL;
         if (ready_handler) {
@@ -574,4 +574,70 @@ Mikrokopter_protocol::Subscribe(Command_id id, Address address)
         VSM_EXCEPTION(Invalid_op_exception, "The stream already exists");
     }
     return stream;
+}
+
+namespace {
+
+std::map<mk_proto::Error_code, const char *> error_messages = {
+    {mk_proto::Error_code::OK, "OK"},
+    {mk_proto::Error_code::FC_NOT_COMPATIBLE, "FC version not compatible with NC"},
+    {mk_proto::Error_code::MK3MAG_NOT_COMPTIBLE, "Mk3Mag version not compatible with NC"},
+    {mk_proto::Error_code::NO_FC_COMM, "No communication with FC"},
+    {mk_proto::Error_code::NO_COMPASS_COMM, "No communication with compass"},
+    {mk_proto::Error_code::NO_GPS_COMM, "No communication with GPS receiver"},
+    {mk_proto::Error_code::BAD_COMPASS_VALUE, "Bad compass value"},
+    {mk_proto::Error_code::RC_SIGNAL_LOST, "RC signal lost"},
+    {mk_proto::Error_code::FC_SPI_RX_ERROR, "No communication with FC via SPI"},
+    {mk_proto::Error_code::NO_NC_COMM, "The communication between FC and NC was suddenly interrupted"},
+    {mk_proto::Error_code::FC_NICK_GYRO, "Gyro sensor error (pitch)"},
+    {mk_proto::Error_code::FC_ROLL_GYRO, "Gyro sensor error (roll)"},
+    {mk_proto::Error_code::FC_YAW_GYRO, "Gyro sensor error (yaw)"},
+    {mk_proto::Error_code::FC_NICK_ACC, "Accelerometer error (pitch)"},
+    {mk_proto::Error_code::FC_ROLL_ACC, "Accelerometer error (roll)"},
+    {mk_proto::Error_code::FC_Z_ACC, "Accelerometer error (Z-axis)"},
+    {mk_proto::Error_code::PRESSURE_SENSOR, "Pressure sensor error"},
+    {mk_proto::Error_code::FC_I2C, "I2C communication with the brush-less controller is disturbed"},
+    {mk_proto::Error_code::BL_MISSING, "Brush-less controller missing"},
+    {mk_proto::Error_code::MIXER_ERROR, "Too many brush-less controllers detected"},
+    {mk_proto::Error_code::CAREFREE_ERROR, "CareFree is used, but the value of the Mk3Mag is invalid"},
+    {mk_proto::Error_code::GPS_LOST, "GPS signal was lost"},
+    {mk_proto::Error_code::MAGNET_ERROR, "Magnetic field of the compass-sensor is different from "
+                                         "the magnetic field during calibration."},
+    {mk_proto::Error_code::MOTOR_RESTART, "Brush-less controller tries motor restarting (possibly blocked runner)"},
+    {mk_proto::Error_code::BL_LIMITATION, "Brush-less controller overload"},
+    {mk_proto::Error_code::WAYPOINT_RANGE, "Waypoint out of range"},
+    {mk_proto::Error_code::NO_SD_CARD, "No SD card"},
+    {mk_proto::Error_code::SD_LOGGING_ABORTED, "SD card writing error"},
+    {mk_proto::Error_code::FLYING_RANGE, "Maximal flight range exceeded"},
+    {mk_proto::Error_code::MAX_ALTITUDE, "Maximal altitude exceeded"},
+    {mk_proto::Error_code::NO_GPS_FIX, "Armed without GPS fix"},
+    {mk_proto::Error_code::COMPASS_NOT_CALIBRATED, "Compass not calibrated"},
+    {mk_proto::Error_code::BL_SELFTEST_ERROR, "Brush-less controller self-test error"},
+    {mk_proto::Error_code::NO_EXT_COMPASS, "External compass error"},
+    {mk_proto::Error_code::COMPASS_ERROR, "Compass error"},
+    {mk_proto::Error_code::FAILSAFE_POS, "Flying to fail-safe position"},
+    {mk_proto::Error_code::REDUNDANCY, "Redundancy degraded"},
+    {mk_proto::Error_code::REDUNDANCY_TEST, "Redundancy test mode"},
+    {mk_proto::Error_code::GPS_UPDATE_RATE, "GPS update rate too low"},
+    {mk_proto::Error_code::CANBUS, "CAN-bus error"},
+    {mk_proto::Error_code::RC_5V_SUPPLY, "5V supply voltage low"},
+    {mk_proto::Error_code::POWER_SUPPLY, "Power supply failure"},
+    {mk_proto::Error_code::ACC_NOT_CALIBRATED, "Accelerometer not calibrated"},
+    {mk_proto::Error_code::PARACHUTE, "Parachute engaged, drone disarmed"},
+    {mk_proto::Error_code::OUTSIDE_FLYZONE, "Fly-zone breached"},
+    {mk_proto::Error_code::NO_FLYZONE, "Fly-zone not loaded"},
+};
+
+}
+
+std::string
+Mikrokopter_protocol::Get_error_message(mk_proto::Error_code code)
+{
+    auto it = error_messages.find(code);
+    if (it == error_messages.end()) {
+        std::stringstream ss;
+        ss << "Unknown error code: " << static_cast<int>(code);
+        return ss.str();
+    }
+    return it->second;
 }

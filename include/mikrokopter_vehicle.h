@@ -9,7 +9,7 @@
 #include <ugcs/vsm/optional.h>
 
 #include <mikrokopter_protocol.h>
-#include <protocol_data.h>
+
 
 class Mikrokopter_vehicle: public ugcs::vsm::Vehicle {
     DEFINE_COMMON_CLASS(Mikrokopter_vehicle, ugcs::vsm::Vehicle)
@@ -25,6 +25,8 @@ private:
         TELEMETRY_REPORT_INTERVAL = std::chrono::milliseconds(400),
         /** Link quality is evaluated with this interval. */
         LINK_MONITOR_INTERVAL = std::chrono::milliseconds(1200);
+    /** Maximal requested telemetry rate, bytes per second. */
+    static constexpr uint16_t MAX_TELEMETRY_RATE = 0x8000;
 
     /** Maximal number of retransmissions for waypoints. */
     static constexpr int MAX_RETRANS = 3;
@@ -54,6 +56,8 @@ private:
     Sys_status sys_status;
     /** Value sent in wp-event-channel field for camera trigger action. */
     int wp_event_value;
+    /** Last received error code. */
+    mk_proto::Error_code last_error = mk_proto::Error_code::OK;
 
     /** Current task upload operation. */
     ugcs::vsm::Operation_waiter task_upload_op;
@@ -82,20 +86,25 @@ private:
             request(request)
         {}
 
+        template<class... Args>
         void
-        Complete(ugcs::vsm::Vehicle_request::Result result = ugcs::vsm::Vehicle_request::Result::OK)
+        Fail(const char * fmt, Args&&... args)
         {
-            request = result;
+            if (fmt) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-security"
+                request.Fail(fmt, std::forward<Args>(args)...);
+#pragma GCC diagnostic pop
+            } else {
+                request.Succeed();
+            }
         }
-    };
 
-    /** Context for mission clear request. */
-    struct State_info_clear_mission: State_info<ugcs::vsm::Vehicle_clear_all_missions_request> {
-        typedef std::shared_ptr<State_info_clear_mission> Ptr;
-
-        State_info_clear_mission(const ugcs::vsm::Vehicle_clear_all_missions_request::Handle &request):
-            State_info(request)
-        {}
+        void
+        Succeed()
+        {
+             request.Succeed();
+        }
     };
 
     /** Context for instant command. */
@@ -118,7 +127,9 @@ private:
         /** Number of actions processed so far. */
                num_act_processed = 0;
         /** Currently set speed, m/s. */
-        double speed = 3.0;
+        double speed = 3.0,
+        /** Currently climb rate, m/s. */
+               climb_rate = 2.0;
         /** Retransmissions counter. */
         int num_retrans = 0;
         /** Current heading value in degrees. */
@@ -184,14 +195,24 @@ private:
         ~Mission();
 
         void
-        Complete();
+        Succeed();
+
+        template<class... Args>
+        void
+        Fail(const char * fmt, Args&&... args)
+        {
+            if (si) {
+                si->Fail(fmt, std::forward<Args>(args)...);
+                si = nullptr;
+            }
+        }
 
         /** Initialize waypoint descriptor with next transmitted waypoint data.
          *
          * @return true if waypoint for created, false if all waypoints transmitted.
          */
         bool
-        Transmit_waypoint(proto::Data<proto::Point> &wp);
+        Transmit_waypoint(mk_proto::Data<mk_proto::Point> &wp);
 
         /** Create waypoint descriptor for last transmitted one.
          *
@@ -199,12 +220,12 @@ private:
          *      retransmissions limit exceeded.
          */
         bool
-        Retransmit_waypoint(proto::Data<proto::Point> &wp);
+        Retransmit_waypoint(mk_proto::Data<mk_proto::Point> &wp);
 
         Mikrokopter_vehicle &vehicle;
         State_info_upload_task::Ptr si;
         /** Generated flight plan. */
-        std::vector<proto::Data<proto::Point>> flight_plan;
+        std::vector<mk_proto::Data<mk_proto::Point>> flight_plan;
         /** Index of the currently item being uploaded. -1 for clear request. */
         int cur_item_idx = -1;
         /** Number of retransmissions for current item. */
@@ -213,6 +234,31 @@ private:
 
     /** Current mission being uploaded. */
     std::unique_ptr<Mission> cur_mission;
+
+    /** Vertical speed calculator based on altitude changes. New protocol does not provide reliable
+     * vertical speed indication.
+     */
+    class Vertical_speed_calc {
+    public:
+        /** Feed next altitude value.
+         *
+         * @param
+         * @return Current averaged value of vertical speed.
+         */
+        double
+        Feed_altitude(double altitude);
+    private:
+        /** Tau for timed rolling averaged, s. */
+        static constexpr double TAU = 1.0;
+        /** Current vertical speed value. */
+        double cur_value = 0;
+        double last_altitude = 0;
+        bool last_valid = false;
+        /** Timestamp of last measurement. */
+        std::chrono::high_resolution_clock::time_point last_measurement;
+    };
+
+    Vertical_speed_calc vert_speed_calc;
 
     /** Enable handler. */
     virtual void
@@ -230,18 +276,9 @@ private:
     virtual void
     Handle_vehicle_request(ugcs::vsm::Vehicle_task_request::Handle request) override;
 
-    /** UCS requesting to clear up all missions on a vehicle. */
-    virtual void
-    Handle_vehicle_request(ugcs::vsm::Vehicle_clear_all_missions_request::Handle request) override;
-
     /** Instant command for a vehicle. */
     virtual void
     Handle_vehicle_request(ugcs::vsm::Vehicle_command_request::Handle request) override;
-
-    /** Mission cleared. */
-    void
-    On_mission_clear(ugcs::vsm::Io_result result, Mikrokopter_protocol::Data_ptr data,
-                     State_info_clear_mission::Ptr si);
 
     /** Instant command execution step finished. */
     void
@@ -258,7 +295,7 @@ private:
      */
     bool
     Create_waypoint(State_info_upload_task::Ptr si,
-                    proto::Data<proto::Point> &wp);
+                    mk_proto::Data<mk_proto::Point> &wp);
 
     /** Create next waypoint for panorama action.
      *
@@ -266,7 +303,7 @@ private:
      */
     bool
     Create_panorama_wp(State_info_upload_task::Ptr si,
-                       proto::Data<proto::Point> &wp);
+                       mk_proto::Data<mk_proto::Point> &wp);
 
     bool
     Request_telemetry();
@@ -282,6 +319,9 @@ private:
 
     void
     Echo_handler(ugcs::vsm::Io_result result, Mikrokopter_protocol::Data_ptr pkt);
+
+    void
+    Set_error_code(mk_proto::Error_code error_code);
 };
 
 #endif /* MIKROKOPTER_VEHICLE_H_ */

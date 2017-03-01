@@ -7,6 +7,9 @@
 
 #include <ugcs/vsm/vsm.h>
 
+#include <protocol_data.h>
+
+
 class Mikrokopter_protocol: public ugcs::vsm::Request_processor {
     DEFINE_COMMON_CLASS(Mikrokopter_protocol, Request_container)
 public:
@@ -199,9 +202,9 @@ public:
                        ugcs::vsm::Request_completion_context::Ptr comp_ctx = nullptr);
 
     std::string
-    Get_serial_number()
+    Get_port_name()
     {
-        return serial_number;
+        return stream->Get_name();
     }
 
     State
@@ -224,6 +227,9 @@ public:
     {
         pkt_stats.Get(received, errors);
     }
+
+    static std::string
+    Get_error_message(mk_proto::Error_code code);
 
 private:
     class Pkt_stats {
@@ -289,8 +295,6 @@ private:
     State state = State::INITIALIZING;
     /** Associated stream. */
     ugcs::vsm::Io_stream::Ref stream;
-    /** Detected vehicle serial number. */
-    std::string serial_number;
     /** Readiness handler if any. */
     Ready_handler ready_handler;
     /** Internal completion context. */
