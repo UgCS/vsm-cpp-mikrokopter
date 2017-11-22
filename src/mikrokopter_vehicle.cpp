@@ -1,4 +1,4 @@
-// Copyright (c) 2014, Smart Projects Holdings Ltd
+// Copyright (c) 2017, Smart Projects Holdings Ltd
 // All rights reserved.
 // See LICENSE file for license details.
 
@@ -69,19 +69,6 @@ Mikrokopter_vehicle::On_enable()
 void
 Mikrokopter_vehicle::On_disable()
 {
-    auto req = Request::Create();
-    req->Set_processing_handler(
-            Make_callback(
-                    &Mikrokopter_vehicle::On_disable_handler,
-                    Shared_from_this(),
-                    req));
-    Get_processing_ctx()->Submit_request(req);
-    req->Wait_done(false);
-}
-
-void
-Mikrokopter_vehicle::On_disable_handler(Request::Ptr request)
-{
     link_monitor_timer->Cancel();
     link_monitor_timer = nullptr;
     telemetry_stream->Close();
@@ -93,8 +80,6 @@ Mikrokopter_vehicle::On_disable_handler(Request::Ptr request)
     echo_request_op.Abort();
     telemetry_stream_read_op.Abort();
     command_op.Abort();
-
-    request->Complete();
 }
 
 void

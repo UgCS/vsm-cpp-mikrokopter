@@ -1,4 +1,4 @@
-// Copyright (c) 2014, Smart Projects Holdings Ltd
+// Copyright (c) 2017, Smart Projects Holdings Ltd
 // All rights reserved.
 // See LICENSE file for license details.
 
@@ -22,12 +22,6 @@ Vehicle_manager::Enable()
         comp_context);
 
     Transport_detector::Get_instance()->Add_detector(
-            "vehicle.mikrokopter.serial_port",
-            Transport_detector::Make_connect_handler(
-                &Vehicle_manager::Port_connect_handler, this),
-            proc_context);
-    Transport_detector::Get_instance()->Add_detector(
-            "vehicle.mikrokopter.tcp",
             Transport_detector::Make_connect_handler(
                 &Vehicle_manager::Port_connect_handler, this),
             proc_context);

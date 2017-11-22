@@ -1,4 +1,4 @@
-// Copyright (c) 2014, Smart Projects Holdings Ltd
+// Copyright (c) 2017, Smart Projects Holdings Ltd
 // All rights reserved.
 // See LICENSE file for license details.
 
@@ -267,10 +267,6 @@ private:
     /** Disable event from base class. */
     virtual void
     On_disable() override;
-
-    /** Disable handler in a vehicle context. */
-    void
-    On_disable_handler(ugcs::vsm::Request::Ptr);
 
     /** Tasks received from UCS. */
     virtual void

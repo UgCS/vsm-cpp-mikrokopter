@@ -56,8 +56,8 @@ http://noctis.de/ramblings/linux/49-howto-fixed-name-for-a-udev-device.html
 If you use your own serial device naming on Linux, do not forget to add the
 corresponding name to the VSM configuration:
 
-    vehicle.mikrokopter.serial_port.2.name = /dev/mikrokopter_1
-    vehicle.mikrokopter.serial_port.2.baud.1 = 57600
+    connection.serial.2.name = /dev/mikrokopter_1
+    connection.serial.2.baud.1 = 57600
 
 Supported MikroKopter firmware versions:
 - 0.x
@@ -107,6 +107,9 @@ set up pattern for the flight controller output OUT1 or SRV3 using KopterTool
 software. You may want to use [shutter cable](http://www.mikrokopter.de/ucwiki/en/ShutterCable) or
 [IR-controller](http://www.mikrokopter.de/ucwiki/en/IR-Ctrl) provided by the
 drone manufacturer.
+
+@image html output-settings-servo.png "Servo mapping"
+@image latex output-settings-servo.png "Servo mapping" width=10cm
 
 When the "take photo" action is fired the waypoint is created with
 wp-event-channel field set to the value specified in the VSM configuration (see
@@ -177,25 +180,21 @@ waypoint with "take photo" action. See @ref mes_camera_trigger section.
 
     vehicle.mikrokopter.wp_event_value = 50
 
+@subsection serial_port_params_vsmspec Serial port configuration
+
+Typically vehicle is connected to UgCS via radio datalink which appears as serial port when USB cable is plugged in.
+See @ref serial_port_parameters for details.
+
+- @b Example:
+
+        connection.serial.1.name = COM21
+        connection.serial.1.baud = 57600
+
 @subsection common_params_section Common parameters
 
 All VSMs share a common set of configuration file parameters described in
 @ref common_config_file_params. MikroKopter VSM configuration file prefix is:
 
     vehicle.mikrokopter
-
-@subsection serial_port_params_vsmspec Serial port configuration
-
-Mandatory. At least one serial port should be configured, otherwise VSM will not
-try to connect to the vehicle.
-
-- @b Name: vehicle.mikrokopter.serial_port
-- @b Description: Serial port configuration, for more details see
-@ref serial_port_parameters.
-Default MikroKopter serial port communication speed is 57600 baud.
-- @b Example:
-
-        vehicle.mikrokopter.serial_port.1.name = com1
-        vehicle.mikrokopter.serial_port.1.baud = 57600
-
+    
 */
