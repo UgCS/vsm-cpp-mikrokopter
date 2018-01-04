@@ -2,8 +2,8 @@
 // All rights reserved.
 // See LICENSE file for license details.
 
-#ifndef MIKROKOPTER_VEHICLE_H_
-#define MIKROKOPTER_VEHICLE_H_
+#ifndef _MIKROKOPTER_VEHICLE_H_
+#define _MIKROKOPTER_VEHICLE_H_
 
 #include <ugcs/vsm/vsm.h>
 #include <ugcs/vsm/optional.h>
@@ -13,8 +13,8 @@
 
 class Mikrokopter_vehicle: public ugcs::vsm::Vehicle {
     DEFINE_COMMON_CLASS(Mikrokopter_vehicle, ugcs::vsm::Vehicle)
-public:
 
+public:
     Mikrokopter_vehicle(Mikrokopter_protocol::Ptr protocol);
 
 private:
@@ -320,4 +320,4 @@ private:
     Set_error_code(mk_proto::Error_code error_code);
 };
 
-#endif /* MIKROKOPTER_VEHICLE_H_ */
+#endif /* _MIKROKOPTER_VEHICLE_H_ */

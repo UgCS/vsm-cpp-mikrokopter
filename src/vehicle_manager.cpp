@@ -37,7 +37,7 @@ Vehicle_manager::Disable()
      */
     proc_context->Disable();
     proc_context = nullptr;
-    for (auto &entry: ports) {
+    for (auto &entry : ports) {
         Port &port = entry.second;
         if (port.vehicle) {
             Disconnect_vehicle(port.vehicle);
@@ -65,7 +65,9 @@ Vehicle_manager::Run()
         std::initializer_list<Request_container::Ptr> {comp_context, proc_context},
         std::chrono::milliseconds::zero(),
         0,
-        Make_callback([this]{ return static_cast<bool>(stop_request); }));
+        Make_callback([this] {
+            return static_cast<bool>(stop_request);
+        }));
 }
 
 void
@@ -82,8 +84,8 @@ Vehicle_manager::Poll_ports()
         Port &port = it->second;
         if ((port.stream && port.stream->Is_closed()) ||
             (port.protocol &&
-             port.protocol->Get_state() == Mikrokopter_protocol::State::CLOSED)) {
-
+             port.protocol->Get_state() == Mikrokopter_protocol::State::CLOSED))
+        {
             LOG_INFO("Disconnected port %s", port.stream->Get_name().c_str());
 
             it = Disconnect_port(port);
@@ -103,7 +105,7 @@ Vehicle_manager::Protocol_ready_handler(Port *port)
         return;
     }
     LOG_INFO("MikroKopter ready on port %s", port->stream->Get_name().c_str());
-    //XXX no serial number support in protocol for now
+    // XXX no serial number support in protocol for now
     std::string sn = port->protocol->Get_port_name();
     auto it = vehicles.find(sn);
     if (it == vehicles.end()) {
@@ -121,7 +123,7 @@ void
 Vehicle_manager::Disconnect_vehicle(Mikrokopter_vehicle::Ptr vehicle)
 {
     vehicle->Disable();
-    vehicles.erase(vehicle->Get_serial_number());//XXX no serial number
+    vehicles.erase(vehicle->Get_serial_number()); // XXX no serial number
     LOG_INFO("MikroKopter vehicle disconnected, port '%s'",
              vehicle->Get_serial_number().c_str());
 }
@@ -143,10 +145,10 @@ Vehicle_manager::Disconnect_port(Port &port)
 
 void
 Vehicle_manager::Port_connect_handler(
-		std::string,
-		int,
-		Socket_address::Ptr,
-		Io_stream::Ref stream)
+    std::string,
+    int,
+    Socket_address::Ptr,
+    Io_stream::Ref stream)
 {
     std::unique_lock<std::mutex> lock(lists_mutex);
     auto res = ports.emplace(stream->Get_name(), Port());

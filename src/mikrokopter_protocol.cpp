@@ -15,7 +15,7 @@ using namespace ugcs::vsm;
 
 Mikrokopter_protocol::Stream::~Stream()
 {
-    for (Pending_request &req: pending_requests) {
+    for (Pending_request &req : pending_requests) {
         req.request->Abort();
     }
     pending_requests.clear();
@@ -191,7 +191,7 @@ Mikrokopter_protocol::On_disable_handler(Request::Ptr request)
     link_detection_op.Abort();
     read_op.Abort();
     write_op.Abort();
-    for (auto &h: response_handlers) {
+    for (auto &h : response_handlers) {
         if (h.second->request) {
             h.second->request->Abort();
             h.second->request = nullptr;
@@ -449,7 +449,7 @@ Mikrokopter_protocol::On_data_received(Io_buffer::Ptr buf, Io_result result)
 {
     if (result == Io_result::OK) {
         std::string data = buf->Get_string();
-        for (char c: data) {
+        for (char c : data) {
             On_char_received(c);
         }
         Schedule_read();
@@ -514,8 +514,8 @@ Mikrokopter_protocol::On_packet_received_raw(std::string &&packet)
     auto crc = Calculate_crc(reinterpret_cast<uint8_t *>(&packet.front()),
                              packet.size() - 2);
     if (packet[packet.size() - 2] != crc.first ||
-        packet[packet.size() - 1] != crc.second) {
-
+        packet[packet.size() - 1] != crc.second)
+    {
         LOG("CRC error");
         return;
     }
@@ -547,8 +547,8 @@ void
 Mikrokopter_protocol::Detection_handler(Io_result result, Data_ptr pkt)
 {
     if (result == Io_result::OK &&
-        mk_proto::Data<mk_proto::Echo>(*pkt)->pattern == DETECTION_PATTERN) {
-
+        mk_proto::Data<mk_proto::Echo>(*pkt)->pattern == DETECTION_PATTERN)
+    {
         state = State::OPERATIONAL;
         if (ready_handler) {
             ready_handler();
@@ -628,7 +628,7 @@ std::map<mk_proto::Error_code, const char *> error_messages = {
     {mk_proto::Error_code::NO_FLYZONE, "Fly-zone not loaded"},
 };
 
-}
+} // namespace
 
 std::string
 Mikrokopter_protocol::Get_error_message(mk_proto::Error_code code)

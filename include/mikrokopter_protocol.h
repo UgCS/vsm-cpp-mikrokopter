@@ -2,8 +2,8 @@
 // All rights reserved.
 // See LICENSE file for license details.
 
-#ifndef MIKROKOPTER_PROTOCOL_H_
-#define MIKROKOPTER_PROTOCOL_H_
+#ifndef _MIKROKOPTER_PROTOCOL_H_
+#define _MIKROKOPTER_PROTOCOL_H_
 
 #include <ugcs/vsm/vsm.h>
 
@@ -12,6 +12,7 @@
 
 class Mikrokopter_protocol: public ugcs::vsm::Request_processor {
     DEFINE_COMMON_CLASS(Mikrokopter_protocol, Request_container)
+
 public:
     /** Protocol state. */
     enum class State {
@@ -81,8 +82,8 @@ public:
     /** Stream for specific messages subscription. */
     class Stream:
         public std::enable_shared_from_this<Stream> {
-
         DEFINE_COMMON_CLASS(Stream, Stream)
+
     public:
         /** Reference type. */
         typedef ugcs::vsm::Reference_guard<Ptr> Ref;
@@ -266,7 +267,7 @@ private:
         }
 
         void
-        operator ++(int)
+        operator++(int)
         {
             Pkt_received();
         }
@@ -278,6 +279,7 @@ private:
             received = this->received;
             errors = this->errors;
         }
+
     private:
         std::mutex mutex;
         /** Total number of packets received. */
@@ -441,4 +443,4 @@ private:
     Handle_send(ugcs::vsm::Io_result result);
 };
 
-#endif /* MIKROKOPTER_PROTOCOL_H_ */
+#endif /* _MIKROKOPTER_PROTOCOL_H_ */

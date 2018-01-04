@@ -2,14 +2,13 @@
 // All rights reserved.
 // See LICENSE file for license details.
 
-#ifndef VEHICLE_MANAGER_H_
-#define VEHICLE_MANAGER_H_
+#ifndef _VEHICLE_MANAGER_H_
+#define _VEHICLE_MANAGER_H_
 
 #include <mikrokopter_vehicle.h>
 
 class Vehicle_manager {
 public:
-
     void
     Enable();
 
@@ -69,11 +68,11 @@ private:
     /** Port connection handler. */
     void
     Port_connect_handler(
-    		std::string port_name,
-    		int baud,
-    		ugcs::vsm::Socket_address::Ptr,
-    		ugcs::vsm::Io_stream::Ref stream);
+            std::string port_name,
+            int baud,
+            ugcs::vsm::Socket_address::Ptr,
+            ugcs::vsm::Io_stream::Ref stream);
 };
 
 
-#endif /* VEHICLE_MANAGER_H_ */
+#endif /* _VEHICLE_MANAGER_H_ */

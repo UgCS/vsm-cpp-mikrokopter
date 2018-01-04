@@ -37,12 +37,6 @@ Mikrokopter_vehicle::Mikrokopter_vehicle(Mikrokopter_protocol::Ptr protocol):
         wp_event_value = 0;
     }
     Set_capability_states(Capability_states{Vehicle::Capability_state::RETURN_HOME_ENABLED});
-
-    c_payload_control = Add_command(subsystems.camera, "payload_control", false, true);
-    c_payload_control->Add_parameter("tilt", ugcs::vsm::proto::FIELD_SEMANTIC_PITCH);
-    c_payload_control->Add_parameter("roll");
-    c_payload_control->Add_parameter("yaw");
-    c_payload_control->Add_parameter("zoom_level", ugcs::vsm::Property::VALUE_TYPE_FLOAT);
 }
 
 void
@@ -372,7 +366,7 @@ Mikrokopter_vehicle::Create_waypoint(State_info_upload_task::Ptr si,
                 }
             }
 
-            si->panorama_delay = static_cast<double>(a->delay.count()) / 1000.0 ;
+            si->panorama_delay = static_cast<double>(a->delay.count()) / 1000.0;
             if (si->panorama_delay > 255) {
                 si->panorama_delay = 255;
             }
@@ -458,11 +452,11 @@ Mikrokopter_vehicle::On_task_upload(Io_result result,
 {
     mk_proto::Data<mk_proto::Point> wp;
     if (result != Io_result::OK ||
-        mk_proto::Data<mk_proto::Send_wp_response>(*data)->count != cur_mission->cur_item_idx + 1) {
-
+        mk_proto::Data<mk_proto::Send_wp_response>(*data)->count != cur_mission->cur_item_idx + 1)
+    {
         if (result == Io_result::TIMED_OUT ||
-            (data && mk_proto::Data<mk_proto::Send_wp_response>(*data)->count == cur_mission->cur_item_idx)) {
-
+            (data && mk_proto::Data<mk_proto::Send_wp_response>(*data)->count == cur_mission->cur_item_idx))
+        {
             if (cur_mission->Retransmit_waypoint(wp)) {
                 if (cur_mission->cur_item_idx >= 0) {
                     VEHICLE_LOG_WRN(*this, "Waypoint [%d] uploading failed, retrying",
@@ -529,8 +523,8 @@ Mikrokopter_vehicle::On_command(Io_result result,
 {
     if (si->request->Get_type() == Vehicle_command::Type::RETURN_HOME) {
         if (result == Io_result::OK &&
-            mk_proto::Data<mk_proto::Send_wp_response>(*data)->count == 0) {
-
+            mk_proto::Data<mk_proto::Send_wp_response>(*data)->count == 0)
+        {
             si->Succeed();
         } else {
             VEHICLE_LOG_WRN(*this, "Mission clear failed in scope of RETURN_HOME command");
@@ -579,7 +573,6 @@ Mikrokopter_vehicle::On_telemetry(Mikrokopter_protocol::Data_ptr data)
         vert_speed_calc.Feed_altitude(static_cast<double>(nav->altitude) / 20));
 
     switch (nav->index) {
-
     case mk_proto::Navi_data_index::FLAGS: {
         auto _nav = mk_proto::Data<mk_proto::Navi_data_flags>(*data);
         if (_nav->status_flags_ex & mk_proto::Status_flags_ex::MOTOR_RUN) {
@@ -626,7 +619,6 @@ Mikrokopter_vehicle::On_telemetry(Mikrokopter_protocol::Data_ptr data)
         t_satellite_count->Set_value(_nav->sats_in_use);
         break;
     }
-
     }
 
     Commit_to_ucs();
@@ -707,8 +699,8 @@ Mikrokopter_vehicle::Echo_handler(Io_result result,
                                   Mikrokopter_protocol::Data_ptr pkt)
 {
     if (result != Io_result::OK ||
-        mk_proto::Data<mk_proto::Echo>(*pkt)->pattern != ECHO_PATTERN) {
-
+        mk_proto::Data<mk_proto::Echo>(*pkt)->pattern != ECHO_PATTERN)
+    {
         lost_echo_count++;
         if (lost_echo_count > MAX_ECHO_LOST) {
             VEHICLE_LOG_WRN(*this, "MikroKopter device link lost");

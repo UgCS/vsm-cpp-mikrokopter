@@ -4,8 +4,8 @@
 
 /** Mikrokopter protocol data structures. */
 
-#ifndef PROTOCOL_DATA_H_
-#define PROTOCOL_DATA_H_
+#ifndef _PROTOCOL_DATA_H_
+#define _PROTOCOL_DATA_H_
 
 namespace mk_proto {
 
@@ -491,6 +491,6 @@ private:
     BufferType payload;
 };
 
-} /* namespace proto */
+} /* namespace mk_proto */
 
-#endif /* PROTOCOL_DATA_H_ */
+#endif /* _PROTOCOL_DATA_H_ */
