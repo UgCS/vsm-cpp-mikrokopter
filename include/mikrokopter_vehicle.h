@@ -1,4 +1,4 @@
-// Copyright (c) 2017, Smart Projects Holdings Ltd
+// Copyright (c) 2018, Smart Projects Holdings Ltd
 // All rights reserved.
 // See LICENSE file for license details.
 
@@ -44,7 +44,8 @@ private:
     /** Periodic timer for link quality reports. */
     ugcs::vsm::Timer_processor::Timer::Ptr link_monitor_timer;
     /** Last downlink statistics. */
-    size_t last_pkts_received, last_pkts_error;
+    size_t last_pkts_error = 0;
+    size_t last_pkts_received = 0;
     double last_link_quality = 1.0;
     /** Quotient for link quality rolling average calculation. */
     static constexpr double LINK_QUALITY_RA_QUOT = 0.5;
@@ -52,8 +53,6 @@ private:
     bool echo_active = false;
     /** Number of echo requests lost. */
     int lost_echo_count = 0;
-    /** Current system status. */
-    Sys_status sys_status;
     /** Value sent in wp-event-channel field for camera trigger action. */
     int wp_event_value;
     /** Last received error code. */

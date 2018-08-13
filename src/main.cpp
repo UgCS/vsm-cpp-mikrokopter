@@ -1,10 +1,12 @@
-// Copyright (c) 2017, Smart Projects Holdings Ltd
+// Copyright (c) 2018, Smart Projects Holdings Ltd
 // All rights reserved.
 // See LICENSE file for license details.
 
 #include <vehicle_manager.h>
 
 #include <ugcs/vsm/run_as_service.h>
+
+DEFINE_DEFAULT_VSM_NAME;
 
 #ifdef __unix__
 #include <signal.h>

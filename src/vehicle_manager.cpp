@@ -1,4 +1,4 @@
-// Copyright (c) 2017, Smart Projects Holdings Ltd
+// Copyright (c) 2018, Smart Projects Holdings Ltd
 // All rights reserved.
 // See LICENSE file for license details.
 
@@ -111,6 +111,7 @@ Vehicle_manager::Protocol_ready_handler(Port *port)
     if (it == vehicles.end()) {
         it = vehicles.emplace(sn, Mikrokopter_vehicle::Create(port->protocol)).first;
         it->second->Enable();
+        it->second->Register();
     } else {
         LOG_WARNING("Serial number conflict, new vehicle connection ignored");
         Disconnect_port(*port);

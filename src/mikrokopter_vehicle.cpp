@@ -1,4 +1,4 @@
-// Copyright (c) 2017, Smart Projects Holdings Ltd
+// Copyright (c) 2018, Smart Projects Holdings Ltd
 // All rights reserved.
 // See LICENSE file for license details.
 
@@ -16,27 +16,24 @@ constexpr std::chrono::milliseconds
 constexpr uint16_t Mikrokopter_vehicle::MAX_TELEMETRY_RATE;
 
 Mikrokopter_vehicle::Mikrokopter_vehicle(Mikrokopter_protocol::Ptr protocol):
-    Vehicle(mavlink::MAV_TYPE_QUADROTOR,
-            static_cast<mavlink::MAV_AUTOPILOT>(mavlink::ugcs::MAV_AUTOPILOT_MIKROKOPTER),
-            Vehicle::Capabilities(Vehicle::Capability::RETURN_HOME_AVAILABLE),
-            protocol->Get_port_name(),
-            "MikroKopter",
-            true),
-    protocol(protocol),
-    sys_status(true, true, Sys_status::Control_mode::UNKNOWN,
-               Sys_status::State::UNKNOWN, std::chrono::seconds(0))
+    protocol(protocol)
 {
-    autopilot_type = "mikrokopter";
-    port_name = protocol->Get_port_name();
+    Set_vehicle_type(ugcs::vsm::proto::VEHICLE_TYPE_MULTICOPTER);
+    Set_model_name("MikroKopter");
+    Set_frame_type("generic_quad_i");
+    Set_autopilot_type("mikrokopter");
+    Set_port_name(protocol->Get_port_name());
     VEHICLE_LOG_INF(*this, "MikroKopter vehicle connected.");
-    Set_system_status(sys_status);
     auto props = Properties::Get_instance();
     wp_event_value = props->Get_int("vehicle.mikrokopter.wp_event_value");
     if (wp_event_value < 0 || wp_event_value > 255) {
         VEHICLE_LOG_ERR(*this, "wp_event_value out of range, disabling WP events");
         wp_event_value = 0;
     }
-    Set_capability_states(Capability_states{Vehicle::Capability_state::RETURN_HOME_ENABLED});
+    c_rth->Set_available();
+    c_rth->Set_enabled();
+    t_uplink_present->Set_value(true);
+    t_downlink_present->Set_value(true);
 }
 
 void
@@ -58,6 +55,9 @@ Mikrokopter_vehicle::On_enable()
         LINK_MONITOR_INTERVAL,
         Make_callback(&Mikrokopter_vehicle::Link_monitor_timer, this),
         Get_completion_ctx());
+
+    // Sends command availability
+    Commit_to_ucs();
 }
 
 void
@@ -576,16 +576,15 @@ Mikrokopter_vehicle::On_telemetry(Mikrokopter_protocol::Data_ptr data)
     case mk_proto::Navi_data_index::FLAGS: {
         auto _nav = mk_proto::Data<mk_proto::Navi_data_flags>(*data);
         if (_nav->status_flags_ex & mk_proto::Status_flags_ex::MOTOR_RUN) {
-            sys_status.state = Sys_status::State::ARMED;
+            t_is_armed->Set_value(true);
         } else {
-            sys_status.state = Sys_status::State::DISARMED;
+            t_is_armed->Set_value(false);
         }
         if (_nav->nc_flags & mk_proto::Nc_flags::CH) {
-            sys_status.control_mode = Sys_status::Control_mode::AUTO;
+            t_control_mode->Set_value(proto::CONTROL_MODE_AUTO);
         } else {
-            sys_status.control_mode = Sys_status::Control_mode::MANUAL;
+            t_control_mode->Set_value(proto::CONTROL_MODE_MANUAL);
         }
-        Set_system_status(sys_status);
         Set_error_code(static_cast<mk_proto::Error_code>(_nav->error_code));
         break;
     }

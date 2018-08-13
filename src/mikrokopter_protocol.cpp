@@ -1,4 +1,4 @@
-// Copyright (c) 2017, Smart Projects Holdings Ltd
+// Copyright (c) 2018, Smart Projects Holdings Ltd
 // All rights reserved.
 // See LICENSE file for license details.
 
@@ -227,7 +227,7 @@ void
 Mikrokopter_protocol::Schedule_read()
 {
     read_op.Abort();
-    read_op = stream->Read(MIN_UDP_PAYLOAD_SIZE_TO_READ, 1,
+    read_op = stream->Read(0, 1,
                  Make_read_callback(&Mikrokopter_protocol::On_data_received,
                                     this),
                  comp_ctx);
