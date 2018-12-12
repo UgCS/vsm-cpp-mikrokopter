@@ -2,10 +2,6 @@
 
 @page vsm_user_guide Connecting MikroKopter autopilot to UgCS
 
-@image latex ugcs-logo.png "" width=3cm
-@image latex main-vsm-logo.png "" width=3cm
-
-
 @section first_time_connecton First time vehicle connection
 
 See @ref vsm_disclaimer.
